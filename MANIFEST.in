@@ -1,0 +1,2 @@
+recursive-include cryovia/default_models/*
+include cryovia/gui/icons/*
