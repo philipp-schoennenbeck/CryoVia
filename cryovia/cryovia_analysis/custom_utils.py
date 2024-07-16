@@ -77,7 +77,6 @@ def get_thickness_from_profile_orig(profile, middle_idx, min_thickness, max_thic
         neg_peaks = [peak for peak in neg_peaks if np.abs(middle_idx - peak) < min_thickness/2]
         best_middle = neg_peaks[np.argmax([profile[peak] for peak in neg_peaks])]
         # if best_middle != best_middle_from_dist:
-        #     print(f"Best middle are different: {best_middle} - {best_middle_from_dist}, {idx}")
         # left_range = ( best_middle- max_thickness / 2, best_middle - min_thickness/2)
         left_range = ( best_middle- max_thickness / 2, best_middle - 1)
         # right_range =  (best_middle + min_thickness/2,  best_middle + max_thickness/2)
@@ -116,13 +115,11 @@ def get_thickness_from_profile_orig(profile, middle_idx, min_thickness, max_thic
             right_property = right_properties[np.argmin([profile[i] for i in right_peaks])]
 
             if best_right - best_left < min_thickness or best_right -best_left > max_thickness:
-                # if idx in [1925,1926,1927,1929,1930,1940,1941]:
-                #     print(best_right, best_left,best_right - best_left, min_thickness, max_thickness)
+
                 return None
             return best_right - best_left, best_left, best_right, closest_other_peak_left, closest_other_peak_right
         else:
-            # if idx in [1925,1926,1927,1929,1930,1940,1941]:
-            #     print(left_peaks, right_peaks)
+
             return None
 
     return None
@@ -137,7 +134,7 @@ def get_thickness_from_profile(orig_profile, middle_idx, min_thickness, max_thic
     sigma = int(4/precision)
     window_size = int(10/precision)
     # for window_size in range(1,len(orig_profile)//4):
-    window = signal.gaussian(window_size, sigma)
+    window = signal.windows.gaussian(window_size, sigma)
     padded_profile = np.concatenate([np.ones((window_size - 1) // 2)* orig_profile[0], orig_profile, np.ones((window_size - 1) // 2)* orig_profile[-1]])
     profile = signal.convolve(padded_profile, window/window.sum(), "valid")
     

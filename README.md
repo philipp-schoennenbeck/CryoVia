@@ -1,6 +1,5 @@
 #Installation
 
-conda create -n cryovia
 
 conda activate cryovia
 
@@ -21,3 +20,6 @@ python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'
 
 ### Make sure you are in the cryovia folder (the folder with the setup.py file)
 pip install .
+
+### Install the GridEdgeDetector repo
+pip install git+https://github.com/philipp-schoennenbeck/GridEdgeDetector.git

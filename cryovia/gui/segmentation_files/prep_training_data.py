@@ -597,7 +597,6 @@ class customDatasetForPerformance(Sequence):
                     has_no_membrane_counter = 0
                     membrane_idxs = []
                     for counter, img in enumerate(segmentation_patches):
-                        print(np.unique(img, return_counts=True))
                         if np.max(img) > 0:
                             has_membrane_counter += 1
                             membrane_idxs.append(counter)
@@ -707,7 +706,6 @@ def getTrainingDataForPerformance(micrographs, segmentations, config, print_func
 
         valid_dataset = customDatasetForPerformance(valid_micrographs, valid_segmentations, batch_size, config, path, "Valid", toStop=toStop, seg_pixel_sizes=valid_seg_pixel_sizes, image_pixel_sizes=image_pixel_sizes, useAll=True)
 
-        print("DONE CREATING FILES")
 
         return train_dataset, valid_dataset
 
@@ -804,16 +802,13 @@ def load_micrographs_files(paths, config, prep=False, per_file=False, get_shapes
         if config.std_clip > 0:
             mean = np.mean(mrc_data)
             std = np.std(mrc_data)
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/low_pass_filtered/high_pass_filtered/{Path(path).stem}_orig.png", mrc_data, cmap="gray")
 
             mrc_data = np.clip(mrc_data, mean- config.std_clip*std,mean + config.std_clip*std)
 
         if config.high_pass_filter > 0:
             sig = int(config.high_pass_filter / pixel_size)
             sig += (sig + 1) % 2
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/low_pass_filtered/high_pass_filtered/{Path(path).stem}_std_clip.png", mrc_data, cmap="gray")
             mrc_data = gaussian_filter(mrc_data,0,pixel_size) - gaussian_filter(mrc_data,sig,pixel_size)
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/low_pass_filtered/high_pass_filtered/{Path(path).stem}_filt.png", mrc_data, cmap="gray")
         if prep is not None:
             mrc_data = preprocess(mrc_data)
         if resize:

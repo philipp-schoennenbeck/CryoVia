@@ -163,9 +163,7 @@ class IoUModelWorker(QObject):
 
             predictions = []
             xs, ys = [], []
-            print(len(dataset))
-            print(dataset.number_of_files)
-            print(dataset.idxs)
+
             for i in range(len(dataset)):
                 x, y = dataset[i]
                 predictions.append(self.model.predict(x, verbose=0))
@@ -185,20 +183,14 @@ class IoUModelWorker(QObject):
             # ys = np.concatenate(ys)
             ys = np.squeeze(np.concatenate(ys))
             ys = np.argmax(ys, -1)
-            np.save(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/test_output_improved_seg_240301/{self.name}.npy", ys)
-            # for counter, (prediction, truth, orig) in enumerate(zip(predictions, ys, xs)):
-            #     plt.imsave(output_dir / f"{counter}.png", prediction, cmap="gray")
-            #     plt.imsave(output_dir / f"{counter}_orig.png", orig, cmap="gray")
-            #     plt.imsave(output_dir / f"{counter}_gt.png", truth, cmap="gray")
-            # self.print(str(compute_iou(prediction, truth)))
+
 
             
             dataset.clean()
             gt = []
             predicted_patches = []
             start = 0
-            print(dataset.numberOfFilesPerMicrograph)
-            print(predictions.shape)
+
             for file_count in dataset.numberOfFilesPerMicrograph:
                 for i in range(file_count):
                     preds = [predictions[start + i + j * file_count] for j in range(4)]
@@ -218,42 +210,7 @@ class IoUModelWorker(QObject):
             self.print(str(compute_iou(predicted_patches, gt)))
             gt = np.array(gt)
             predicted_patches = np.array(predicted_patches)
-            print(gt.shape, predicted_patches.shape)
-            print(classification_report(gt.flatten(), predicted_patches.flatten()))
-            # x_pred = self.normalize(x_pred)
-            # x_pred = x_pred[0]
-            # shape = shape[0]
-
-            # for patch in x_pred:
-            #     turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
-            #     turned_patches_total.extend(turned_patches)
-            # turned_patches = np.array(turned_patches_total)
-            
-            # prediction = []
-            # for i in range(0, len(turned_patches), working_batch_size):
-            #     prediction.append(self.model.predict(turned_patches[i:i+working_batch_size], batch_size=working_batch_size, verbose=0))
-
-            #     gc.collect()
-            #     if self.toStop:
-            #         self.finished.emit()
-            #         return
-
-            # prediction = np.concatenate(prediction)
-
-
-            # prediction = self.model.predict(turned_patches, batch_size=working_batch_size, verbose=0)
-
-            
-            # predictions = softmax(prediction, -1)
-            # predicted_patches = []
-            # for i in range(len(x_pred)):
-            #     turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
-
-            #     prediction = np.sum(turned_pred, 0)
-
-            #     predicted_patches.append(prediction)
-            # predicted_patches = np.array(predicted_patches)
-            # # predicted_image = unpatchify(predicted_patches,shape, self.config, threshold=True)
+  
                 
                 
         self.finished.emit()
@@ -572,9 +529,7 @@ class TrainModelWorker(QObject):
 
             # x_train = self.normalize(x_train)
             self.callbacks.append(get_print_callback(self.config.train_epochs))
-            self.print("Test")
             with tf.device(self.gpu):  
-                self.print("Test_2")
                 # y_train = y_train.astype(np.float32)
                 # callbacks = self.createCallbacks()
                 # callbacks.extend(callback_functions)
@@ -970,8 +925,7 @@ class TrainWidget(QWidget):
 
 
             self.threads[item.segModel.name] = QThread()
-            print(m.config.thin_segmentation)
-            print(m.config.dilation)
+
             self.workers[item.segModel.name] = IoUModelWorker(m.load(), m.config, gpu, cores, m.name,m.testData )
             
             self.workers[item.segModel.name].moveToThread(self.threads[item.segModel.name])

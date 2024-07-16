@@ -286,17 +286,6 @@ class Network_path:
             self.length_ = length
         return self.length_
 
-    # @property
-    # def ellipse_fitting(self):
-    #     if self.ellipse_fitting_ is None:
-    #         global COUNTER
-    #         global CURRENT_LAB
-    #         pts = self.get_points()
-    #         # print(f"{COUNTER+1} / {CURRENT_LAB}")        
-    #         coeffs, ellipse_error = fit_complete_ellipse(pts, draw_ellipse=False, extra=f"{CURRENT_LAB}_{COUNTER}_{self.node_path}")
-    #         COUNTER += 1
-    #         self.ellipse_fitting_ = ellipse_error
-    #     return self.ellipse_fitting_
     
     
     @property
@@ -337,9 +326,6 @@ class Network_path:
                 line_pts = np.array(line(pts[-1][0],pts[-1][1], pts[0][0],pts[0][1])).T
                 if len(line_pts) > 2:
                     pts = np.concatenate((pts, line_pts[1:-1]))
-                # print("IS CYCLE")
-                # print(self.name)
-                # print(line_pts)
 
             pts = pts.astype(np.int32)
             dif = np.sum(np.abs(np.diff(pts, axis=0)), 1)
@@ -355,11 +341,9 @@ class Network_path:
             if self.is_cycle:
                 if pts[0][0] == pts[-1][0] and pts[0][1] == pts[-1][1]:
                     pts = pts[:-1]
-            # print(pts.dtype)
 
 
             self.pts_ = pts
-            # print(pts)
         return self.pts_
     
 

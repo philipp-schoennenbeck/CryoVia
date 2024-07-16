@@ -23,7 +23,6 @@ def copyShapeCurvatures():
         raise FileNotFoundError(default_path)
     for file in os.listdir(default_path):
         filename = default_path / file
-        print(filename, filename.suffix)
         if filename.suffix == ".npy":
             shutil.copy(filename, CRYOVIA_PATH / "Shape_curvatures" / file)
             print(f"Copy shape curvature {file}")

@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: cryovia
+Version: 0.0.1
+Summary: cryovia
+Author: Philipp Schönnenbeck
+Author-email: p.schoennenbeck@fz-juelich.de
+License: BSD
+Requires-Dist: numpy==1.24.1
+Requires-Dist: mrcfile
+Requires-Dist: scipy
+Requires-Dist: opencv-python
+Requires-Dist: napari[all]
+Requires-Dist: matplotlib
+Requires-Dist: pandas
+Requires-Dist: pyqtgraph
+Requires-Dist: qimage2ndarray
+Requires-Dist: scikit-learn==1.2.2
+Requires-Dist: scikit-image
+Requires-Dist: seaborn
+Requires-Dist: sparse
+Requires-Dist: tqdm
+Requires-Dist: silence-tensorflow
+Requires-Dist: starfile
+Requires-Dist: ray

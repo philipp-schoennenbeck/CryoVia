@@ -42,6 +42,8 @@ setup(
         'sparse',
         'tqdm',
         "silence-tensorflow",
+        "starfile",
+        "ray"
         # 'napari_mrcfile_reader'
         # 'nvidia-cudnn-cu11==8.1.0',
         # 'cudatoolkit==11.2.2',

@@ -75,14 +75,7 @@ class Membrane(dict):
     def analyser(self, value):
         self.analyser_ = value
 
-    # def __repr__(self):
-    #     stats_to_print = ["path_idx", "is_circle", "area", "length", "isoperimetric_quotient", "convexity", "solidity", "shape", "shape_probability"]
 
-    #     out_string = "*******\n"
-    #     for stat in stats_to_print:
-    #         out_string += stat.capitalize() + ": " + str(self.__getattribute__(stat)) + "\n"
-
-    #     return out_string
 
     def get_first_and_last(self):
         return self[0], self[len(self)-1]
@@ -273,7 +266,6 @@ class Membrane(dict):
         try:
             image = self.analyser.segmentation_stack[self.membrane_idx][y_min:y_max + 1, x_min:x_max + 1].todense()
         except Exception as e:
-            print(self.membrane_idx, y_min, y_max, x_min, x_max)
             raise e
         # image -= np.min(image)
         # image /= np.max(image)
@@ -349,7 +341,6 @@ class Membrane(dict):
         if max_distance == 0:
             return
 
-        # For the multiprocessing set some global variables
         max_distance = max_distance / self.analyser.pixel_size
         
                 
@@ -428,13 +419,28 @@ class Membrane(dict):
 
 
     def turn_horizontal(self):
-        def angle_between(vector_1, vector_2):
+        # def angle_between(vector_1, vector_2):
 
-            unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
-            unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
-            dot_product = np.dot(unit_vector_1, unit_vector_2)
-            angle = np.arccos(dot_product)
-            return angle
+        #     unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+        #     unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+        #     dot_product = np.dot(unit_vector_1, unit_vector_2)
+        #     angle = np.arccos(dot_product)
+        #     return angle * -1
+        def unit_vector(vector):
+            """ Returns the unit vector of the vector"""
+            return vector / np.linalg.norm(vector)
+
+        def angle_between(vector1, vector2):
+            """ Returns the angle in radians between given vectors"""
+            v1_u = unit_vector(vector1)
+            v2_u = unit_vector(vector2)
+            minor = np.linalg.det(
+                np.stack((v1_u[-2:], v2_u[-2:]))
+            )
+            if minor == 0:
+                return 0
+
+            return np.sign(minor) * np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
         def rotate(points, origin, angle):
             return (points - origin) * np.exp(complex(0, angle)) + origin
@@ -450,7 +456,7 @@ class Membrane(dict):
             best_idxs =(max_idx, max_idxs[max_idx])
             pt_1 = coords[best_idxs[0]]
             pt_2 = coords[best_idxs[1]]
-
+            
             longest_vector = pt_1 - pt_2
             
             angle = angle_between(longest_vector, np.array([0,1]))
@@ -472,14 +478,30 @@ class Membrane(dict):
         y,x = turn_horizontal(coords).T
         return y,x
 
-    def resize(self, resizeShape):
+    def resize(self, resizeShape, landmarks=None):
         y,x = self.turn_horizontal()
+        y -= np.min(y)
+        x -= np.min(x)
         range_y = np.max(y) - np.min(y)
         range_x = np.max(x) - np.min(x)
         range_ = max(range_y, range_x)
         modifier = resizeShape / range_
         y *= modifier
         x *= modifier
+        if landmarks is not None:
+            to_interpolate = np.linspace(0,1,landmarks)
+            coords = self.coords
+            distance = np.cumsum( np.sqrt(np.sum( np.diff(coords, axis=0)**2, axis=1 )) )
+            # rescale distance
+            
+            distance = np.insert(distance, 0, 0)/distance[-1]
+
+            if self.is_circle:
+                period = 1
+            else:
+                period = None
+            x = np.interp(to_interpolate, distance, x, period=period)
+            y = np.interp(to_interpolate, distance, y, period=period)
         return y,x
 
 
@@ -522,6 +544,7 @@ class Membrane(dict):
     def resize_contour(self, resizeShape,landmarks): 
         coords = self.coords
         y,x = self.turn_horizontal()
+
         range_y = np.max(y) - np.min(y)
         range_x = np.max(x) - np.min(x)
         range_ = max(range_y, range_x)
@@ -578,7 +601,6 @@ class Membrane(dict):
         attr, list: List of attributes to distribute"""
 
         
-        
         points = self.points()
         idxs = self.idxs()
         all_points = self.point_list
@@ -620,9 +642,7 @@ class Membrane(dict):
             to_use_idxs = np.argmin(attr_dist, 0)
             # nones = [True if value is None else False for value in all_values]
             nones = [True if all_values[idx] is None else False for idx in to_use_idxs]
-            # if "thickness" in attr:
-            #     print(nones)
-            #     print(all_values)
+
         
             
                                 
@@ -997,6 +1017,7 @@ class Membrane(dict):
         # output_img = output_img/np.nanmax(output_img)
         
         current_cmap.set_bad(color='black')
+        
         if get_individual:
             return output_img, current_cmap
         

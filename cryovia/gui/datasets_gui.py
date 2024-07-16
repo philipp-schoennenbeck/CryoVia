@@ -105,19 +105,6 @@ class AnalyserWorker(QObject):
 
 
 
-    # def print(self, msg):
-    #     self.progress.emit(("print", f"{self.name}: {msg}"))
-
-    # def emitCallback(self, epoch, logs):
-    #     self.progress.emit(("epoch_logs", (epoch,logs)))
-
-
-    # def stop(self, name):
-    #     self.print(name, self.model.name)
-    #     if name == self.model.name:
-    #         self.print("Stopping...")
-    #         self.toStop = True
-
 
     def run(self):
         try:
@@ -271,10 +258,7 @@ class FilterWidget(QWidget):
         self.parent().parent().parent().parent().parent().removeFilter(self.id)
     
     def addFilter(self):
-        # i = self.parent()
-        # while i is not None:
-        #     print(type(i))
-        #     i = i.parent()
+
         self.parent().parent().parent().parent().parent().addFilter()
 
     def getValues(self):
@@ -592,7 +576,6 @@ class DatasetTabsWidget(QTabWidget):
         for name, (tableview,_, dataset) in self.datasetTabs.items():
             
         
-            print(name)
             data:pd.DataFrame = tableview.model().shown_data
             column = data.columns[column_idx]
             std = data[column].std()
@@ -1073,7 +1056,6 @@ class DatasetButtonWidget(QWidget):
         items = listwidget.selectedItems()
         if len(items) == 1:
             
-            save_dir = Path("/Data/erc-3/schoennen/tests/test_new_dataset")
             dataset = items[0].dataset
             save_dir = dataset.dataset_path.parent
             if dataset.isZipped:
@@ -1528,7 +1510,6 @@ class nJobsDialog(QDialog):
         new_x = ((x_end + x) // 2) - 150
         new_y = ((y_end + y) // 2) - 50
         self.setGeometry(new_x, new_y, 300,100)
-        # print(x,y,x_end, y_end, new_x, new_y)
         self.layout().addWidget(self.njobsLabel, 0, 0)
         self.layout().addWidget(self.njobsLineedit, 0, 1)
         self.layout().addWidget(self.threadsLabel, 1, 0)
@@ -2142,7 +2123,6 @@ class ImageData:
             self.image = q2n.gray2qimage(np.array(tn[idx]))
             self.mask = q2n.gray2qimage(np.array(seg[idx]))
         except KeyError as e:
-            print(row["Micrograph"], row["Index"])
             raise e
 
 
@@ -2227,8 +2207,7 @@ class MicrographData:
                 try:
                     l, nr = label(seg, np.ones((3,3)))
                 except Exception as e:
-                    print(e)
-                    print(seg.shape)
+
                     raise e
                 timer["label"] = (datetime.datetime.now() - now).total_seconds()
                 now = datetime.datetime.now()
@@ -2492,7 +2471,6 @@ class PreviewDelegate(QStyledItemDelegate):
         
         painter.drawImage(option.rect.x() + x + scaled.width(), option.rect.y() + y, scaled_mask)
         if hasattr(data, "segmentation"):
-            print(self.parent())
             QToolTip.showText(option.rect.center(), data.segmentation, self.parent())
         # painter.restore()
     def sizeHint(self, option, index):
@@ -2536,9 +2514,7 @@ class customSelectionModel(QItemSelectionModel):
                     # newItemSelection.select()
 
                 super().select(newselection, flags)
-            # for i in selection:
-            #     [print(j.row(), j.column()) for j in i.indexes()]
-            # print("Shift + left-click selection")
+
 
         else:
             # Call the base class method for other selection types
@@ -2608,8 +2584,7 @@ class InspectionTableView(QTableView):
             if index.isValid():
                 # Retrieve the data of the clicked item
                 self.selectionModel().currentlyClickedIndex = index
-                # clicked_data = index.data()
-                # print("Clicked item:", clicked_data)
+
 
         # Call the base class method to perform the default mouse press event handling
         super().mousePressEvent(event)
@@ -2621,8 +2596,7 @@ class InspectionTableView(QTableView):
             if index.isValid():
                 # Retrieve the data of the clicked item
                 self.selectionModel().lastClickedIndex = index
-                # clicked_data = index.data()
-                # print("Clicked item:", clicked_data)
+
 
 
 
@@ -2818,8 +2792,6 @@ class MicrographInspectionWindow(QWidget):
                 self.model.previews[counter ] = res
                 timer["rest"] += (datetime.datetime.now() - now).total_seconds()
                 now = datetime.datetime.now()
-                if counter %10 == 0:
-                    print(timer)
             
 
 
@@ -2872,9 +2844,7 @@ class MicrographInspectionWindow(QWidget):
             return
         new_idxs = [idx.row() * self.model.columnCount() + idx.column() for idx in idxs]
         pd_idxs = self.model.deleteIdxs(new_idxs)
-        # print(pd_idxs)
-        # pd_idxs = self.data.iloc[new_idxs].index
-        # print(pd_idxs)
+
         if self.to_remove is None:
             self.to_remove = pd_idxs
         else:
@@ -2890,9 +2860,7 @@ class MicrographInspectionWindow(QWidget):
                 return
             new_idxs = [idx.row() * self.model.columnCount() + idx.column() for idx in idxs]
             pd_idxs = self.model.deleteIdxs(new_idxs)
-            # print(pd_idxs)
-            # pd_idxs = self.data.iloc[new_idxs].index
-            # print(pd_idxs)
+
             if self.to_remove is None:
                 self.to_remove = pd_idxs
             else:
@@ -2951,8 +2919,7 @@ class MicrographInspectionWindow(QWidget):
                     if k not in timer:
                         timer[k] = 0
                     timer[k] += v
-                if counter % 10 == 0:
-                    print(timer)
+
 
         else:
             with mp.get_context("spawn").Pool(njobs) as pool:
@@ -2978,10 +2945,8 @@ class MicrographInspectionWindow(QWidget):
                         if k not in timer:
                             timer[k] = 0
                         timer[k] += v
-                    # if counter % 10 == 0:
-                    #     print(timer)
-                print("test")
-            print("TEST")
+
+
         self.model.layoutChanged.emit()
         self.indexChanged()
         self.view.resizeRowsToContents()
@@ -3004,7 +2969,6 @@ class MicrographInspectionWindow(QWidget):
             self.moveIndexUpButton.setEnabled(False)
         else:
             self.moveIndexUpButton.setEnabled(True)
-        print("INDEX CHANGED")
 
     def changeIndex(self, direction):
         self.idx += int(direction * 100)
@@ -3127,9 +3091,7 @@ class InspectionWindow(QWidget):
             
             new_idxs = [idx.row() * self.model.columnCount() + idx.column() for idx in idxs]
             pd_idxs = self.model.deleteIdxs(new_idxs)
-            # print(pd_idxs)
-            # pd_idxs = self.data.iloc[new_idxs].index
-            # print(pd_idxs)
+
             self.data = self.data.drop(index=pd_idxs)
             if self.to_remove is None:
                 self.to_remove = pd_idxs

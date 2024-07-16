@@ -1,0 +1,17 @@
+numpy==1.24.1
+mrcfile
+scipy
+opencv-python
+napari[all]
+matplotlib
+pandas
+pyqtgraph
+qimage2ndarray
+scikit-learn==1.2.2
+scikit-image
+seaborn
+sparse
+tqdm
+silence-tensorflow
+starfile
+ray

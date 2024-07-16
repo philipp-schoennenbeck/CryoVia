@@ -126,7 +126,6 @@ def fit_line(pts, start, get_vector=False, verbose=False):
     try:
         (a,b), res, rank, sing_v, rcond = np.polyfit(pts[:,1], pts[:,0],1,full=True)
     except Exception as e:
-        print(pts)
         raise e
     perp_error = np.sum(perp_dist(pts[:,1],pts[:,0], a,-1, b))
     own_error = np.sum((np.abs((a*pts[:,1] + b) - pts[:,0])))
@@ -244,8 +243,7 @@ class curvature_network(nx.MultiGraph):
             pts = data["pts"]
             if np.sum(mask[pts[...,0], pts[...,1]] == 0) > 0.5 * len(pts):
                 edges_to_remove.append((u,v,k))
-            # if np.sum(mask[pts[...,0], pts[...,1]]) > 0.4 * len(pts):
-            #     print(np.sum(mask[pts[...,0], pts[...,1]]) / len(pts))
+
         self.remove_edges_from(edges_to_remove)
     
     def border_edge(self,pts,u,v, border_threshold=None):
@@ -332,7 +330,6 @@ class curvature_network(nx.MultiGraph):
 
             skeletons.append(l[1:-1,1:-1])
 
-            # plt.imsave(f"/Data/erc-3/schoennen/cryovia_test_datasets/Test_dataset_output/specific_edges/solved/{self.idx}_{u}_{v}_{k}_{d}.png",l)
             if dilation:
                 lab = skilabel(l, background=-1, connectivity=2)
                 num_features = len(np.unique(lab))
@@ -520,8 +517,7 @@ class curvature_network(nx.MultiGraph):
             double_connections = []
             for c_counter, connection in enumerate(sorted_values):
                 fc, sc = connection.connection
-                # if fc == (2,3,0) or fc == (3,2,0):
-                #     print(fc, sc, all_nodes, fc==sc,connection.type, "AOSIJDOASJHDO")
+
                 if fc == sc or connection.type == "same":
                     continue
                 all_nodes = set([fc[0], fc[1], sc[0], sc[1]])
@@ -695,9 +691,7 @@ class curvature_network(nx.MultiGraph):
             self.create_custom_edges()
             edges = self.edges(data=True, keys=True)
             edges = [(u,v,k,data) for u,v,k,data in edges if self.degree(u) == 1 or self.degree(v) == 1 or (u==v and data["weight"] < 10)]
-            # if verbose:
-            #     print(edges)
-            #     print([(u,v,k,data, self.degree(u), self.degree(v)) for u,v,k,data in self.edges(data=True, keys=True)])
+
             if len(edges) == 0:
                 return
             lengths = [data["weight"] for u,v,k,data in edges]
@@ -827,11 +821,7 @@ class curvature_network(nx.MultiGraph):
             try:
                 nodes = [self.nodes[idx] for idx in nodes_idx]
             except Exception as e:
-                print(self.nodes())
-                print(counter)
-                print(nodes_idx)
-                print(before_idxs)
-                print(connected_nodes)
+
 
                 raise e
             original_node_pts = {idx:node for idx, node in zip(nodes_idx, nodes)}
@@ -1005,31 +995,12 @@ class curvature_network(nx.MultiGraph):
         self.add_not_allowed(*edge_idxs[0], *edge_idxs[1])
         self.add_not_allowed(*edge_idxs[1], *edge_idxs[0])
         if  "nodes" in edge_data_2 and u in edge_data_2["nodes"]:
-            # print( self.idx, " Found nodes ",u,v, node_idx, edge_idxs, edge_data_1["nodes"],edge_data_2["nodes"])
             
-            # print(f"Found {u} in edge_data_2 {edge_idxs[1]}.",f"1_{self.idx}_{u}_{v}_{edge_idxs}", edge_data_2["nodes"])
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_1[...,0], edge_pts_1[...,1]] = 32
-            # img[edge_pts_2[...,0], edge_pts_2[...,1]] = 255
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}.png", img)
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_1[...,0], edge_pts_1[...,1]] = 32
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}_1.png", img)
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_2[...,0], edge_pts_2[...,1]] = 255
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}_2.png", img)
             distances = cdist([edge_pts_1[0]], edge_pts_2)
             best_idx = np.argmin(distances, 1)[0]
             new_edge_data = np.concatenate((edge_pts_1, extra_line, edge_pts_2[:best_idx]))
             other_pts = edge_pts_2[best_idx:]
-            # img = np.zeros_like(self.image)
-            # img[new_edge_data[...,0], new_edge_data[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}_new.png", img)
-            # img = np.zeros_like(self.image)
-            # img[other_pts[...,0], other_pts[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}_other.png", img)
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/1_{self.idx}_{u}_{v}_{edge_idxs}_segmentation.png", self.image)
-
+            
             new_node_idx = np.max([i for i in self.nodes.keys()]) + 1
             node_attr = {"pts":new_edge_data[:1], "o":new_edge_data[0], "junction_pts":junction_pts}
             edge_data = new_edge_data[1:]
@@ -1045,28 +1016,12 @@ class curvature_network(nx.MultiGraph):
             
         elif "nodes" in edge_data_1 and v in edge_data_1["nodes"]:
             
-            # print(f"Found {u} in edge_data_1 {edge_idxs[1]}.", f"2_{self.idx}_{u}_{v}_{edge_idxs}", edge_data_1["nodes"], )
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_1[...,0], edge_pts_1[...,1]] = 1
-            # img[edge_pts_2[...,0], edge_pts_2[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}.png", img)
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_1[...,0], edge_pts_1[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}_1.png", img)
-            # img = np.zeros_like(self.image)
-            # img[edge_pts_2[...,0], edge_pts_2[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}_2.png", img)
+           
             distances = cdist([edge_pts_2[-1]], edge_pts_1)
             best_idx = np.argmin(distances, 1)[0]
             new_edge_data = np.concatenate((edge_pts_1[best_idx:], extra_line, edge_pts_2))[::-1]
             other_pts = edge_pts_1[:best_idx]
-            # img = np.zeros_like(self.image)
-            # img[new_edge_data[...,0], new_edge_data[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}_new.png", img)
-            # img = np.zeros_like(self.image)
-            # img[other_pts[...,0], other_pts[...,1]] = 1
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}_other.png", img)
-            # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/not_allowed_combining/2_{self.idx}_{u}_{v}_{edge_idxs}_segmentation.png", self.image)
+           
 
             new_node_idx = np.max([i for i in self.nodes.keys()]) + 1
             node_attr = {"pts":new_edge_data[:1], "o":new_edge_data[0], "junction_pts":junction_pts}
@@ -1075,8 +1030,7 @@ class curvature_network(nx.MultiGraph):
             self.add_node(new_node_idx, **node_attr)
             key = self.add_edge(new_node_idx,new_node_idx, pts=edge_data, weight=self.calc_lengths(edge_data), junction_pts=junction_pts)
             return new_node_idx, new_node_idx, key
-            new_edge_data = other_pts
-            extra_line_pts = []
+
         
         nodes_1 = set()
         nodes_2 = set()
@@ -1373,7 +1327,6 @@ class edge:
         try:
             (a,b), res, rank, sing_v, rcond = np.polyfit(pts[:,1], pts[:,0],1,full=True)
         except Exception as e:
-            print(pts)
             raise e
         perp_error = np.sum(perp_dist(pts[:,1],pts[:,0], a,-1, b))
         own_error = np.sum((np.abs((a*pts[:,1] + b) - pts[:,0])))
@@ -1640,98 +1593,6 @@ class junction:
             if len(current_idxs) <= 1:
                 break
 
-            # centers = np.array([self.edges[idx].curvatures[edge_direction[idx]]["center"] for idx in current_idxs])
-
-            
-            # center_distances = cdist(centers,centers)
-
-
-            # center_distances_combined = np.array([[self.edges[idx].find_combined_curvature_distance(self.edges[other_idx], (edge_direction[idx],edge_direction[other_idx]), True) for other_idx in current_idxs] for idx in current_idxs])
-            # # center_distances_combined_normalized = np.array([[self.edges[idx].find_combined_curvature_distance(self.edges[other_idx], (edge_direction[idx],edge_direction[other_idx]), True) for other_idx in current_idxs] for idx in current_idxs])
-            # if self.network.idx == 39 and getpass.getuser() == "schoennen" and counter == 5:
-            #     print(current_idxs)
-            #     print(group_distance)
-            #     print(center_distances)
-            #     print(center_distances_combined)
-            # center_distances = np.stack((center_distances, center_distances_combined),-1)
-            # center_distances = np.min(center_distances, -1)
-            # for i in range(len(centers)):
-            #     center_distances[i,i] = np.Inf
-            # groups = []
-            
-            # not_assigned = set(np.arange(len(current_idxs)))
-            # while len(not_assigned) != 0 :
-                
-            #     idx = next(iter(not_assigned))
-            #     current_group = [idx]
-            #     for other_idx in not_assigned:
-            #         if any([center_distances[i][other_idx] < group_distance for i in current_group]):
-            #             current_group.append(other_idx)
-            #     not_assigned.difference_update(current_group)
-            #     groups.append(current_group)
-            
-            
-            # left_over = []
-            # for group in groups:
-            #     if len(group) > 2:
-            #         group:list
-            #         while len(group) > 1:
-            #             group_idxs = [current_idxs[g] for g in group]
-            #             curvatures = np.expand_dims(np.array([self.edges[idx].curvatures[edge_direction[idx]]["curvature"] for idx in group_idxs]),-1)
-
-            #             curvatures_distances = cdist(curvatures,curvatures)
-                        
-            #             for i in range(len(curvatures)):
-            #                 curvatures_distances[i,i] = np.Inf
-            #             distances_flattened = curvatures_distances.flatten()
-            #             argsorted_distances = np.argsort(distances_flattened)
-            #             if self.network.idx == 39 and getpass.getuser() == "schoennen" and counter == 5:
-            #                 print(curvatures)
-            #                 print(curvatures_distances)
-            #                 print(distances_flattened)
-            #                 print(argsorted_distances)
-            #                 print(not_allowed_per_angle)
-            #             for idx in argsorted_distances:
-            #                 argmin_idx = np.unravel_index(idx, curvatures_distances.shape)
-            #                 if (group_idxs[argmin_idx[0]], group_idxs[argmin_idx[1]]) in not_allowed_per_angle:
-            #                     continue
-            #                 if argmin_idx[0] == argmin_idx[1]:
-            #                     continue
-                            
-            #                 changed = True
-            #                 connections.append((group_idxs[argmin_idx[0]], group_idxs[argmin_idx[1]]))
-            #                 c_id.append("curvature_distance")
-
-            #                 # del self.edges[group_idxs[argmin_idx[0]]]
-            #                 # del self.edges[group_idxs[argmin_idx[1]]]
-            #                 group.pop(np.max(argmin_idx))
-            #                 group.pop(np.min(argmin_idx))
-            #                 break
-            #             else:
-            #                 left_over.extend(group)
-            #                 break
-
-
-                        
-                    
-            #     else:
-            #         left_over.extend(group)
-            # if len(left_over) <= 1:
-            #     break
-            # current_idxs = [current_idxs[g] for g in left_over]
-            # centers = np.array([self.edges[idx].curvatures[edge_direction[idx]]["center"] for idx in current_idxs])
-
-            # center_distances = np.array([[self.edges[idx].find_combined_curvature_distance(self.edges[other_idx], (edge_direction[idx],edge_direction[other_idx]), True) for other_idx in current_idxs] for idx in current_idxs])
-            # for i in range(len(centers)):
-            #     center_distances[i,i] = np.Inf
-            
-            # center_distances_flattened = center_distances.flatten()
-            # argsorted_center_distances = np.argsort(center_distances_flattened)
-            # if self.network.idx == 39 and getpass.getuser() == "schoennen" and counter == 5:
-            #     print(argsorted_center_distances)
-            #     print(center_distances)
-            #     print(current_idxs)
-            #     print(not_allowed_per_angle)
 
 
             center_distances = np.array([[self.edges[idx].get_curvature_fitting(self.edges[other_idx], (edge_direction[idx],edge_direction[other_idx])) for other_idx in current_idxs] for idx in current_idxs])
@@ -1743,12 +1604,10 @@ class junction:
             center_distances_flattened = center_distances.flatten()
             argsorted_center_distances = np.argsort(center_distances_flattened)
             dont_use_anymore = set()
-            # print(center_distances.shape)
 
 
             for idx in argsorted_center_distances:
                 argmin_idx = np.unravel_index(idx, center_distances.shape)
-                # print(argmin_idx, idx, current_idxs)
                 if (current_idxs[argmin_idx[0]], current_idxs[argmin_idx[1]]) in not_allowed_per_angle:
                     continue
                 if argmin_idx[0] == argmin_idx[1]:
@@ -1789,26 +1648,7 @@ class junction:
             connection_values.append(c)
 
         return connection_values
-        edges_to_remove = set()
-        for connection in connections:
-            for key in connection:
-                e = self.network.custom_edges[key]
-                print(key, e.curvatures)
-            u,v,k = self.network.combine_edges(connection, (edge_direction[connection[0]],edge_direction[connection[1]]), self.node_idx, self.junction_pts)
-            if self.network.idx == 52:
-                print(u,v,k)
-            edges_to_remove.add(connection[0])
-            edges_to_remove.add(connection[1])
-
         
-        
-        self.network.remove_edges_from(edges_to_remove)
-
-        if self.network.degree(self.node_idx) == 0:
-            pass
-            # self.network.remove_node(self.node_idx)
-        return len(connections) > 0
-
 
             
 
@@ -1907,7 +1747,6 @@ def solve_for_layer(testing_image, k, mask, only_closed, data, non_closed_min_si
     edges = sknw_graph.number_of_edges()
 
     if nodes > max_nodes:
-        print(nodes, max_nodes)
         return None
     pts = np.array(np.nonzero(testing_skeleton)).T
     label_pts = np.array(np.nonzero(testing_image)).T
@@ -1916,7 +1755,6 @@ def solve_for_layer(testing_image, k, mask, only_closed, data, non_closed_min_si
         best_skeleton_coord = []
         all_distances = []
         for i in range(len(label_pts) // 10000 + 1 ):
-            print(i, len(label_pts) // 10000 + 1)
             distances = cdist(pts, label_pts[i*10000:(i+1)*10000])
             best_skeleton_coord.append(np.argmin(distances,0))
             all_distances.append(np.min(distances,0))
@@ -2039,7 +1877,6 @@ def solve_circle_pts(center, radius, shape, edge_1_weight, edge_2_weight, starti
         path = np.sqrt(np.sum(np.diff(pts, axis=0)**2,axis=1))
         unconnected =  np.any(path > 1.5)
         new_weight = np.sum(path)
-        # print(new_weight)
         too_long = new_weight > edge_1_weight and new_weight > edge_2_weight
 
     return current_intersection_image, pts, too_long, unconnected
@@ -2221,9 +2058,7 @@ def solve_skeleton_per_job(l, mask, only_closed, non_closed_min_size=0, name=Non
         data = l
     
     data = close_small_holes(data)
-    # if getpass.getuser() == "schoennen":
-    #     random_nr = np.random.randint(1000,50000)
-    #     plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/angles/seg_{random_nr}.png", data, cmap="gray")
+
 
     l_, ls_ = label(data, np.ones((3,3)))
     shape = data.shape
@@ -2238,7 +2073,6 @@ def solve_skeleton_per_job(l, mask, only_closed, non_closed_min_size=0, name=Non
             continue
         cnx_instances, edges, skeletons, closed, pts = result
         if len(cnx_instances) > 0:
-            # print(len(current_instances))
             current_instances.append(cnx_instances)
             # current_edges.extend(edges)
             current_labels.append(k)
@@ -2246,7 +2080,6 @@ def solve_skeleton_per_job(l, mask, only_closed, non_closed_min_size=0, name=Non
             current_closed.extend(closed)
             all_pts.extend(pts)
     
-            #     plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/angles/{k}.png", testing_skeleton)
     if len(current_instances) > 0:
         current_instances = np.concatenate(current_instances)
     if connect_parts:
@@ -2332,7 +2165,6 @@ def solve_skeleton_per_job(l, mask, only_closed, non_closed_min_size=0, name=Non
 
         new_instances = [ni for counter, ni in enumerate(new_instances) if counter not in solved]
 
-        print(current_instances.shape, np.array(new_instances).shape, )
         if len(current_instances) > 0 and len(new_instances) > 0:
             current_instances = np.concatenate((current_instances, new_instances))
         elif len(current_instances) > 0:

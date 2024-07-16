@@ -814,16 +814,19 @@ class Analyser:
             return self.loadMicrograph()
         return utils.resizeMicrograph(self.loadMicrograph(), self.segmentation_shape)
 
-    def getResizedSegmentation(self, pool=None, new_max_membrane_width=None):
+    def getResizedSegmentation(self, pool=None, new_max_membrane_width=None, no_multiprocessing=False):
         if np.all([i == j for i,j in zip(self.segmentation_shape, self.micrograph_shape)]):
             return self.segmentation_stack
         else:
             if new_max_membrane_width is None:
                 if pool is None:
-                    with mp.Pool(self.njobs) as pool:
-                        result = [pool.apply_async(utils.resizeSegmentation, [self.segmentation_stack[i, ...], self.micrograph_shape]) for i in range(self.segmentation_stack.shape[0])]
-                        result = [res.get() for res in result]
-                        resized_label_image = sparse.stack(result)
+                    if no_multiprocessing:
+                        result = [utils.resizeSegmentation(self.segmentation_stack[i, ...], self.micrograph_shape) for i in range(self.segmentation_stack.shape[0])]
+                    else:
+                        with mp.Pool(self.njobs) as pool:
+                            result = [pool.apply_async(utils.resizeSegmentation, [self.segmentation_stack[i, ...], self.micrograph_shape]) for i in range(self.segmentation_stack.shape[0])]
+                            result = [res.get() for res in result]
+                    resized_label_image = sparse.stack(result)
                 else:
                     result = [pool.apply_async(utils.resizeSegmentation, [self.segmentation_stack[i, ...], self.micrograph_shape]) for i in range(self.segmentation_stack.shape[0])]
                     result = [res.get() for res in result]
@@ -831,10 +834,14 @@ class Analyser:
             else:
 
                 if pool is None:
-                    with mp.Pool(self.njobs) as pool:
-                        result = [pool.apply_async(utils.resizeSegmentationFromCoords, [self.membranes_[i].coords, self.segmentation_stack[i, ...].shape, self.micrograph_shape, new_max_membrane_width, self.pixel_size]) for i in range(self.segmentation_stack.shape[0])]
-                        result = [res.get() for res in result]
-                        resized_label_image = sparse.stack(result)
+                    if no_multiprocessing:
+                        result = [utils.resizeSegmentationFromCoords(self.membranes_[i].coords, self.segmentation_stack[i, ...].shape, self.micrograph_shape, new_max_membrane_width, self.pixel_size) for i in range(self.segmentation_stack.shape[0])]
+
+                    else:
+                        with mp.Pool(self.njobs) as pool:
+                            result = [pool.apply_async(utils.resizeSegmentationFromCoords, [self.membranes_[i].coords, self.segmentation_stack[i, ...].shape, self.micrograph_shape, new_max_membrane_width, self.pixel_size]) for i in range(self.segmentation_stack.shape[0])]
+                            result = [res.get() for res in result]
+                    resized_label_image = sparse.stack(result)
                 else:
                     result = [pool.apply_async(utils.resizeSegmentationFromCoords, [self.membranes_[i].coords, self.segmentation_stack[i, ...].shape, self.micrograph_shape, new_max_membrane_width, self.pixel_size]) for i in range(self.segmentation_stack.shape[0])]
                     result = [res.get() for res in result]
@@ -842,7 +849,7 @@ class Analyser:
             return resized_label_image
 
 
-    def estimateThickness(self, max_neighbour_dist=150, min_thickness=20, max_thickness=70, pool=None, sigma=2 ):
+    def estimateThickness(self, max_neighbour_dist=150, min_thickness=20, max_thickness=70, pool=None, sigma=2, no_multiprocessing=False ):
 
        
         
@@ -852,7 +859,7 @@ class Analyser:
             image_filter = utils.matlab_style_gauss2D(shape=(length_of_filter, length_of_filter), sigma=10/self.micrograph_pixel_size)  
             smoothed_image = signal.convolve(self.loadMicrograph(), image_filter, mode="same")
 
-            resized_segmentation = self.getResizedSegmentation(pool,max_thickness)
+            resized_segmentation = self.getResizedSegmentation(pool,max_thickness, no_multiprocessing=no_multiprocessing)
 
             distance_maps = {}
             cropped_images = {}
@@ -870,8 +877,12 @@ class Analyser:
                
             
             # croppeds = []
-            result = [pool.apply_async(utils.create_distance_map, [membrane, ratio, resized_segmentation[membrane.membrane_idx], self.micrograph_pixel_size, (interp_ys[membrane.membrane_idx],interp_xs[membrane.membrane_idx])]) for  membrane in self.membranes]
-            result = [res.get() for res in result]
+            if no_multiprocessing:
+                result = [utils.create_distance_map(membrane, ratio, resized_segmentation[membrane.membrane_idx], self.micrograph_pixel_size, (interp_ys[membrane.membrane_idx],interp_xs[membrane.membrane_idx])) for  membrane in self.membranes]
+
+            else:
+                result = [pool.apply_async(utils.create_distance_map, [membrane, ratio, resized_segmentation[membrane.membrane_idx], self.micrograph_pixel_size, (interp_ys[membrane.membrane_idx],interp_xs[membrane.membrane_idx])]) for  membrane in self.membranes]
+                result = [res.get() for res in result]
             for res,membrane in zip(result, self.membranes):
                 idx = membrane.membrane_idx
                 current_distance_map, new_indice_map, (y_min,y_max, x_min,x_max), to_estimate, cropped = res
@@ -922,9 +933,13 @@ class Analyser:
 
         def estimate_thickness( pool, distance_maps, cropped_images, indices):
 
-            result = [pool.apply_async(utils.estimate_thickness, [membrane, distance_maps[membrane.membrane_idx], cropped_images[membrane.membrane_idx], indices[membrane.membrane_idx], max_neighbour_dist, min_thickness, max_thickness, self.micrograph_path.stem])
-                       for membrane in self.membranes]
-            result = [res.get() for res in result]
+            if no_multiprocessing:
+                result = [utils.estimate_thickness(membrane, distance_maps[membrane.membrane_idx], cropped_images[membrane.membrane_idx], indices[membrane.membrane_idx], max_neighbour_dist, min_thickness, max_thickness, self.micrograph_path.stem)
+                        for membrane in self.membranes]
+            else:
+                result = [pool.apply_async(utils.estimate_thickness, [membrane, distance_maps[membrane.membrane_idx], cropped_images[membrane.membrane_idx], indices[membrane.membrane_idx], max_neighbour_dist, min_thickness, max_thickness, self.micrograph_path.stem])
+                        for membrane in self.membranes]
+                result = [res.get() for res in result]
             for membrane, res in zip(self.membranes, result):
                 
                 membrane_attributes, point_attributes = res
@@ -946,17 +961,22 @@ class Analyser:
             membrane.analyser = None
 
         if pool is None:
-            with mp.get_context("spawn").Pool(self.njobs) as pool:
-                args = create_distance_map(pool)
-                # return args
-                estimate_thickness(pool, *args)
+            if no_multiprocessing:
+                args = create_distance_map(None)
+                estimate_thickness(None, *args)
+            else:
+                with mp.get_context("spawn").Pool(self.njobs) as pool:
+                    args = create_distance_map(pool)
+                    # return args
+                    estimate_thickness(pool, *args)
         else:
             args = create_distance_map(pool)
             # return args
             estimate_thickness(pool, *args)
         for membrane in self.membranes:
             membrane.analyser = self
-            membrane.distribute_attributes_to_neighbours(["thickness"], sigma)
+            if sigma is not None:
+                membrane.distribute_attributes_to_neighbours(["thickness"], sigma)
         return
 
     def predictShapes(self, predictor:Path):
@@ -1199,7 +1219,6 @@ class Analyser:
             before_shape = self.segmentation_stack.shape
             self.segmentation_stack = self.segmentation_stack[indexes]
         except IndexError as e:
-            print(self.segmentation_stack.shape, indexes, before_shape )
             raise e
 
         indexes = set(indexes)
@@ -1305,161 +1324,7 @@ class Analyser:
 
 
 
-    # def read_marshalable_object(self, ms):
-    #     special_type_translation = {
-    #         "Path":Path,
-    #         "PosixPath": Path,
-    #         "np.ndarray":np.array,
 
-    #     }
-
-    #     normal_type_translation = {
-    #         str:str,
-    #         int:np.int32,
-    #         float:np.float32,
-    #         bool:bool,
-    #         np.float_:float,
-    #         type(None):lambda *args:None,
-    #         }
-
-
-    #     for key, value in ms.items():
-    #         attr, attr_value = value
-    #         attr = attr.replace("<class '", "").replace("'>", "").split(".")[-1]
-    #         if key == "membranes_":
-    #             self.membranes_ = [Membrane.read_marshalable_object(v, "Membrane") for v in attr_value]
-    #         elif type(attr_value) == list:
-
-    #             setattr(self, key, np.array(attr_value))
-    #         elif attr in special_type_translation:
-    #             setattr(self, key, special_type_translation[attr](attr_value))
-    #         elif type(attr_value) in normal_type_translation:
-    #             setattr(self, key, normal_type_translation[type(attr_value)](attr_value))
-            
-    #         # print(key, attr, type(attr_value))
-
-
-    # def save_marshal(self, save_path=None, protocol=0,remove_neighbours=True):
-        
-    #     if save_path is None:
-    #         save_path = self.dataset_path / (self.micrograph_path.stem + ".dat")
-    #     self.found_neighbours = False
-    #     for membrane in self.membranes:
-    #         membrane :Membrane
-    #         membrane.analyser_ = None
-    #         for p in membrane.point_list:
-    #             if remove_neighbours:
-    #                 p.neighbourhood_points = [[],[]]
-    #             p.thickness_profile["profile"] = []
-    #             p.thickness_profile["unsmoothed"] = []
-    #     with open(save_path, "wb") as f:
-    #         marshal.dump(self.make_marshalable_object(), f)
-        
-    #     for membrane in self.membranes:
-    #         membrane :Membrane
-    #         membrane.analyser_ = self
-    #     return save_path
-
-
-
-    # def make_marshalable_object(self):
-    #     "booleans, integers, floating point numbers, complex numbers, strings, bytes, bytearrays, tuples, lists, sets, frozensets, dictionaries"
-    #     from pathlib import PosixPath
-        
-
-    #     type_translation = {
-    #         str:str,
-    #         Path:str,
-    #         PosixPath:str,
-    #         float:float,
-    #         int:int,
-    #         bool:bool,
-    #         np.bool_:bool,
-    #         np.ndarray:list,
-    #         np.float_:float,
-    #         type(None):lambda *args:None,
-    #         np.str_:str,
-    #         np.int_:int
-
-    #         }
-        
-    #     iterables = set([list, tuple])
-    #     special = {"segmentation_stack":lambda x: None, "membranes_":lambda x:None}
-
-
-    #     out_ = []
-    #     call = []
-    #     self.micrograph_pixel_size = float(self.micrograph_pixel_size)
-    #     marshal_object = {}
-    #     for attr in dir(self):
-    #         if len(attr) > 2 and attr[:2] == "__":
-    #             continue
-    #         if hasattr(Analyser, attr):
-    #             if isinstance(getattr(type(self), attr), property):
-    #                 continue
-    #         if callable(getattr(self, attr)):
-    #             call.append(attr)
-    #             continue
-            
-            
-    #         if attr in special:
-    #             if attr == "membranes_":
-    #                 marshal_object[attr] = ("membranes", [membrane.make_marshalable_object() for membrane in self.membranes_])
-    #             continue
-    #         if type(getattr(self, attr)) in iterables:
-    #             if all([type(element) in type_translation for element in getattr(self, attr)]):
-    #                 marshal_object[attr] = ((str(type(getattr(self, attr)[0]))), [type_translation[type(element)](element) for element in getattr(self, attr)])
-    #             else:
-    #                 raise TypeError
-    #             continue
-    #         if type(getattr(self, attr)) in type_translation:
-    #             marshal_object[attr] = (str(type(getattr(self, attr))),type_translation[type(getattr(self, attr))](getattr(self, attr)))
-    #             continue
-    #         else:
-    #             for key, value in type_translation.items():
-    #                 if isinstance(type(getattr(self, attr)), key):
-    #                     marshal_object[attr] = (str(type(getattr(self, attr)), key(getattr(self, attr))))
-    #                     break
-    #             else:
-                        
-    #                 out_.append((attr, type(getattr(self, attr))))
-    #     if len(out_) > 0:
-    #         print(out_)
-    #     return marshal_object
-    #     self.micrograph_path = Path(micrograph_path)
-    #     self.segmentation_path = segmentation_path
-    #     self.pixel_size = kwargs["pixel_size"]
-    #     self.only_closed = kwargs["only_closed"]
-    #     self.max_hole_size = kwargs["max_hole_size"]
-    #     self.min_size = kwargs["min_size"]
-        
-    #     self.found_neighbours = False
-    #     self.njobs = njobs
-    #     # self.project_path = Path(project_path)
-    #     self.dataset_path = Path(dataset)
-    #     self.membranes_ = []
-    #     self.name = name
-    #     self.segmentation_shape_ = None
-    #     self.micrograph_shape_ = None
-    #     self.micrograph_pixel_size = kwargs["micrograph_pixel_size"]
-
-
-    #     self.max_distance = None
-
-    #     mkdir(self.dataset_path)
-    #     # self.setSegmentationPath()
-    #     self.setPixelSize()
-    #     # self.segmentation(None)
-
-    #     self.step_size = np.max([1,kwargs["step_size"]/self.pixel_size])
-
-    #     if np.sum(self.loadSegmentation()) == 0:
-    #         return
-    #     self.createThreeDStack()
-
-    #     if self.empty:
-    #         return
-    #     self.createMembranes(pool)
 
 import os
 
@@ -1473,14 +1338,7 @@ class AnalyserWrapper:
     def check_files(self):
         if not self.valid_dir(self.directory):
             raise FileNotFoundError
-        # files = [self.directory / "analyser.pickle", self.directory / "membranes.csv", self.directory / "points.json"]
-        # dirs = [self.directory / "thumbnails" / "micrograph", self.directory / "thumbnails" / "segmentation"]
-        # for file in files:
-        #     if not file.exists():
-        #         raise FileNotFoundError(file)
-        # for d in dirs:
-        #     if not d.exists():
-        #         raise FileNotFoundError(d)
+
             
     @staticmethod
     def from_analyser(analyser, overwrite=False):
@@ -1609,7 +1467,6 @@ class AnalyserWrapper:
 
                 # micrograph = low_pass_filter(micrograph, 0.1)
             except Exception as e:
-                print(e)
                 micrograph = None
             for m in analyser.membranes:
                 a_attributes.append([m.length, m.diameter,m.area, m.shape, m.shape_probability, m.thickness, m.is_circle, m.min_thickness, m.max_thickness,m.mean_thickness,
@@ -1642,8 +1499,6 @@ class AnalyserWrapper:
         try:
             analyser = AnalyserWrapper.valid_analyser_path(analyser_path)
         except Exception as e:
-            print(f"{rewrite_dir}, {AnalyserWrapper.valid_dir(analyser_path)}, {AnalyserWrapper.valid_dir(Path(analyser_path).parent)}, {AnalyserWrapper.valid_dir(analyser_path.parent / analyser_path.stem)}, {analyser_path}")
-            print(e)
 
             raise e
         analyser_path = Path(analyser_path)
@@ -1734,18 +1589,23 @@ class AnalyserWrapper:
     def remove(self):
         micrograph_path = self.directory / "thumbnails"/ "micrograph"
         segmentation_path = self.directory / "thumbnails"/ "segmentation"
+        thumbnail_path = self.directory / "thumbnails"
         membranes_path = self.directory / "membranes.csv"
         points_path = self.directory / "points.json"
         analyser_path =  self.directory / "analyser.pickle"
         whole_segmentation_path = self.directory / "segmentation.npz"
         shutil.rmtree(micrograph_path)
         shutil.rmtree(segmentation_path)
+        shutil.rmtree(thumbnail_path)
         os.remove(membranes_path)
         os.remove(points_path)
         os.remove(analyser_path)
         os.remove(whole_segmentation_path)
         if len(os.listdir(self.directory)) == 0:
             shutil.rmtree(self.directory)
+        else:
+            print(list[os.listdir(self.directory)])
+        
 
 
     def get_thumbnails(self, idxs=None):

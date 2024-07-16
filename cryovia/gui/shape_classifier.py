@@ -14,8 +14,8 @@ from keras.callbacks import ModelCheckpoint,ReduceLROnPlateau,EarlyStopping
 from tensorflow.config import list_logical_devices
 from tensorflow import device
 from scipy.interpolate.interpolate import interp1d
-CLASSIFIER_PATH = Path().home() / ".matk" / "Classifiers"
-SHAPE_CURVATURE_PATH = Path().home() / ".matk" / "Shape_curvatures"
+CLASSIFIER_PATH = Path().home() / ".cryovia" / "Classifiers"
+SHAPE_CURVATURE_PATH = Path().home() / ".cryovia" / "Shape_curvatures"
 PROTECTED_SHAPES = set(["sphere", "hourglass", "pear", "prolate", "stomatocyte", "tube", "elongated_pear"])
 
 
@@ -388,7 +388,6 @@ class ShapeClassifier(object):
 
             train_curvatures, test_curvatures, train_shapes, test_shapes = [],[],[],[]
             unique_labels, unique_label_count = np.unique(all_shapes, return_counts=True)
-            print(unique_labels, unique_label_count)
             shape_counter = {}
             for counter, idx in enumerate(idxs):
                 if all_shapes[idx] not in shape_counter:
@@ -422,7 +421,6 @@ class ShapeClassifier(object):
                 all_curvatures = np.expand_dims(all_curvatures, -1)
                 train_curvatures, test_curvatures, train_shapes, test_shapes = [],[],[],[]
                 unique_labels, unique_label_count = np.unique(np.argmax(all_shapes,-1), return_counts=True)
-                print(unique_labels, unique_label_count)
                 shape_counter = {}
                 for counter, idx in enumerate(idxs):
                     if np.argmax(all_shapes[idx]) not in shape_counter:

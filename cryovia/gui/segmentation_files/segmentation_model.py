@@ -34,7 +34,7 @@ import shutil
 from cryovia.gui.Unpickler import CustomUnpickler
 import sys
 from matplotlib import pyplot as plt
-SEGMENTATION_MODEL_DIR = Path().home() / ".matk" / "SegmentationModels"
+SEGMENTATION_MODEL_DIR = Path().home() / ".cryovia" / "SegmentationModels"
 
 
 
@@ -593,162 +593,7 @@ class segmentationModel:
         # callbacks.extend(self.createCustomCallbacks())
         return callbacks
 
-    # def train(self, gpu, cores=1, callback_functions=[], ):
-    #     """
-    #     Usually not used by CRYO-VIA itself, could be broken
-    #     """
-    #     if not self.writable:
-    #         return
-    #     import tensorflow as tf
-    #     from tensorflow.keras.optimizers import Adam
-
-    #     def test_batch_size(batch_size, model):
-    #         x_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,1), dtype=np.float32)
-    #         y_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,2), dtype=np.float32)
-    #         try:
-    #             model.fit(x=x_batch, y=y_batch, batch_size=batch_size, epochs=1, verbose=0, validation_split=0)
-    #             return True
-    #         except Exception as e:
-    #             return False
-    #     self.print("TRAINING")
-    #     if len(self.trainPaths["images"]) == 0 or self.currently_training:
-    #         length = len(self.trainPaths["images"])
-    #         self.print(f"Not Training, {length} and {self.currently_training}")
-    #         return
-    #     self.currently_training = True
-    #     x_train, y_train = getTrainingData(self.trainPaths["images"],self.trainPaths["segmentations"], self.config)
-
-    #     x_train = self.normalize(x_train)
-    #     with tf.device(gpu):
-            
-    #         model = self.load()
-            
-            
-
-            
-    #         y_train = y_train.astype(np.float32)
-    #         callbacks = self.createCallbacks()
-    #         callbacks.extend(callback_functions)
-            
-    #         optimizer = Adam(learning_rate=self.config.train_learning_rate)
-    #         loss = segmentationLoss([1.0,5.0],2)
-
-    #         model.compile(optimizer, loss)
-
-    #         if self.config.determine_batch_size:
-    #             current_batch_size = self.config.batch_size
-    #             working_batch_size = None
-    #             tried_batch_sizes = set()
-    #             while current_batch_size not in tried_batch_sizes:
-    #                 tried_batch_sizes.add(current_batch_size)
-    #                 if current_batch_size == 0:
-    #                     self.currently_training = False
-    #                     return 
-    #                 if test_batch_size(current_batch_size, model):
-    #                     working_batch_size = current_batch_size
-    #                     current_batch_size *= 2
-    #                 else:
-    #                     current_batch_size = current_batch_size // 2
-    #         else:
-    #             working_batch_size = self.config.batch_size
-    #         self.print(f"Found fitting batch size: {working_batch_size}")
-    #         optimizer = Adam(learning_rate=self.config.train_learning_rate)
-    #         model.compile(optimizer, loss)
-
-    #         history = model.fit(x=x_train, y=y_train, batch_size=working_batch_size,
-    #             epochs=5, verbose=1, validation_split=0.2, callbacks=callbacks)
-        
-    #     self.print(history.history)
-    #     self.currently_training = False
-    #     self.save()
-
-
-    # def train_for_performance(self, gpu, cores=1, callback_functions=[], seed=1, validation_split_start=0, validation_split_end=0.5, epochs=5 ):
-    #     if not self.writable:
-    #         return
-    #     import tensorflow as tf
-    #     from tensorflow.keras.optimizers import Adam
-
-    #     def test_batch_size(batch_size, model):
-    #         x_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,1), dtype=np.float32)
-    #         y_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,2), dtype=np.float32)
-    #         try:
-    #             model.fit(x=x_batch, y=y_batch, batch_size=batch_size, epochs=1, verbose=0, validation_split=0)
-    #             return True
-    #         except Exception as e:
-    #             return False
-    #     self.print("TRAINING")
-    #     if len(self.trainPaths["images"]) == 0 or self.currently_training:
-    #         length = len(self.trainPaths["images"])
-    #         self.print(f"Not Training, {length} and {self.currently_training}")
-    #         return
-    #     self.currently_training = True
-    #     # x_train, y_train = getTrainingData(self.trainPaths["images"],self.trainPaths["segmentations"], self.config)
-    #     # results = getTrainingDataForPerformance(self.trainPaths["images"],self.trainPaths["segmentations"], self.config, validation_start=validation_split_start, validation_end=validation_split_end, seed=seed)
-
-    #     # results["valid"]["x"] =self.normalize(results["valid"]["x"])
-    #     # results["train"]["x"] =self.normalize(results["train"]["x"])
-    #     # results["valid"]["y"] = results["valid"]["y"].astype(np.float32)
-    #     # results["train"]["y"] = results["train"]["y"].astype(np.float32)
-
-    #     # x_train = self.normalize(x_train)
-    #     with tf.device(gpu):
-            
-    #         model = self.load()
-            
-            
-
-            
-            
-    #         callbacks = self.createCallbacks()
-    #         callbacks.extend(callback_functions)
-    #         callbacks.append(customCallback(self.createCustomCallbacks()))
-            
-    #         optimizer = Adam(learning_rate=self.config.train_learning_rate)
-    #         loss = segmentationLoss([1.0,5.0],2)
-
-    #         model.compile(optimizer, loss)
-
-    #         if self.config.determine_batch_size:
-    #             current_batch_size = self.config.max_batch_size
-    #             working_batch_size = None
-    #             tried_batch_sizes = set()
-    #             while current_batch_size not in tried_batch_sizes:
-    #                 tried_batch_sizes.add(current_batch_size)
-    #                 if current_batch_size == 0:
-    #                     self.currently_training = False
-    #                     return 
-    #                 if test_batch_size(current_batch_size, model):
-    #                     working_batch_size = current_batch_size
-    #                     current_batch_size *= 2
-    #                 else:
-    #                     current_batch_size = current_batch_size // 2
-                    
-    #         else:
-    #             working_batch_size = self.config.max_batch_size
-    #         self.print(f"Found fitting batch size: {working_batch_size}")
-
-    #         train, valid = getTrainingDataForPerformance(self.trainPaths["images"],self.trainPaths["segmentations"], self.config, validation_start=validation_split_start, validation_end=validation_split_end, seed=seed
-    #                                                 , batch_size=working_batch_size)
-
-            
-
-    #         try:
-    #             optimizer = Adam(learning_rate=self.config.train_learning_rate)
-    #             model.compile(optimizer, loss)
-
-    #             history = model.fit(x=train, batch_size=working_batch_size,
-    #                 epochs=epochs, verbose=1,validation_data=valid, callbacks=callbacks)
-    #             train.clean()
-    #             valid.clean()
-    #         except Exception as e:
-    #             train.clean()
-    #             valid.clean()
-    #             raise e
-    #         return
-    #     self.print(history.history)
-    #     self.currently_training = False
-    #     self.save()
+    
 
 
     def normalize(self, x):
@@ -757,20 +602,7 @@ class segmentationModel:
         
         x = np.array([(img - mean) / std for img, mean, std in zip(x, means, stds)])
         return x
-        
-    # def predict(self, x, batch_size=None):
-    #     if x.shape[-1] != 1:
-    #         x = np.expand_dims(x, -1)
-            
-    #         if len(x.shape) == 3:
-    #             x = np.expand_dims(x, 0)
-    #     x = self.normalize(x)
-    #     model = self.load()
-    #     if batch_size is None:
-    #         prediction = model.predict(x, batch_size=self.config.batch_size)
-    #     else:
-    #         prediction = model.predict(x, batch_size=batch_size)
-    #     return prediction
+ 
 
 
     def load(self, loaddir=None):
@@ -1138,7 +970,6 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                 
                 tried_batch_sizes.add(current_batch_size)
                 if current_batch_size == 0:
-                    print(tried_batch_sizes)
                     tf.keras.backend.clear_session()
                     return 
                 if test_batch_size(current_batch_size, model):
@@ -1211,8 +1042,7 @@ def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_pa
                 mask = find_grid_hole_per_file(path, **kwargs["maskGrid"])
             if mask is not None:
                 mask = resizeSegmentation(mask,predicted_image.shape).todense()
-                # print(kwargs["maskGrid"])
-                # plt.imsave("/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/mask_carbon_edge/mask.png", mask, cmap="gray")
+
         if kwargs["segmentation"]["filled_segmentation"]:
             predicted_image = get_contour_of_filled_segmentation(predicted_image)
         else:
@@ -1223,7 +1053,6 @@ def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_pa
                         max_nodes = kwargs["segmentation"]["max_nodes"]
                     predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["general"]["use_only_closed"], name=path, max_membrane_thickness=10, connect_parts=kwargs["segmentation"]["combine_snippets"], max_nodes=max_nodes)
                 except Exception as e:
-                    print(path)
                     raise e
 
         predicted_image = sparse.as_coo(predicted_image)

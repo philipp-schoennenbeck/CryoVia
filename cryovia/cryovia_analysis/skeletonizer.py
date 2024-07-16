@@ -485,24 +485,10 @@ def getInterpolatedSkeleton(coords, distance, is_circle, shape, label_skeleton, 
 
 
     coords = np.array(np.array([interp_y, interp_x]).T)
-    # print(name, coords[:10], np.array(np.array([float_interp_y, float_interp_x]).T)[:10])
-    # unique_coords, ind = np.unique(coords, axis=0, return_index=True)
-    # # print(unique_coords[:10], ind[:10])
 
-    
-    # coords = coords[np.argsort(ind)]
-    
-    # float_interp_x = float_interp_x[np.argsort(ind)]
-    # float_interp_y = float_interp_y[np.argsort(ind)]
 
     float_coords = np.array(np.array([float_interp_y, float_interp_x]).T)
 
-    # if is_circle:
-
-    #     res = np.sqrt(np.sum(np.diff(np.concatenate([coords, coords[:1]]), axis=0)**2, axis=-1))
-    # else:
-    #     res = np.sqrt(np.sum(np.diff(coords, axis=0)**2, axis=-1))
-    #     res = np.concatenate(([0], res))
     res = np.sqrt(np.sum(np.diff(coords, axis=0)**2, axis=-1))
     if np.any(res > 1.5):
         distance += 1
@@ -532,18 +518,14 @@ def getInterpolatedSkeleton(coords, distance, is_circle, shape, label_skeleton, 
     allowed_features = 1
     if is_circle:
         allowed_features = 2
-    # print(name, allowed_features, num_features, np.nanmax(confidence_image), coord_round_distance[5], float_coords[5], coords[5])
     lab = lab[1:-1,1:-1] 
-    # if name[-2:] == "62":
-    #     print(num_features, allowed_features)
+
     if num_features > allowed_features:
         u, nu = np.unique(lab, return_counts=True)
-        # if name[-2:] == "62":
-        #     print(u,nu)
+
         argsorted_uniques = np.argsort(nu)
         for b in range(num_features -allowed_features):
-            # if name[-2:] == "62":
-            #     print(u, nu, u[argsorted_uniques[b]], argsorted_uniques, b, np.sum(lab==u[argsorted_uniques[b]]))
+
             label_image[lab==u[argsorted_uniques[b]]] = 1
             confidence_image[lab==u[argsorted_uniques[b]]] = np.nanmin(confidence_image)
 
@@ -555,11 +537,7 @@ def getInterpolatedSkeleton(coords, distance, is_circle, shape, label_skeleton, 
         skeleton = thin_open(label_image, confidence_image,end_points=(tuple(coords[0].tolist()), tuple(coords[-1].tolist())))
     if skeleton is None:
         pass
-        # if getpass.getuser() == "schoennen":
-        #     plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/skeletonizer_mistakes/{name}.png", label_image)
-        #     plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/skeletonizer_mistakes/{name}_conf.png", confidence_image)
 
-            # print(name)
     return skeleton
 
 
@@ -603,13 +581,7 @@ def predictMiddleFrangi(segmentation, confidence, cropped, skeleton, distance=10
     # resizedskeleton[rc_y, rc_x] = 1
     if skeleton is None:
         pass
-        # if getpass.getuser() =="schoennen":
-        #     plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/skeletonizer_mistakes/{name}_seg.png", segmentation)
-        #     corrected = np.zeros_like(confidence)
-        #     for p in corrected_points:
-        #         corrected[p[0], p[1]] = 1
 
-        #         plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/skeletonizer_mistakes/{name}_corrected.png", corrected)
 
     return skeleton
 

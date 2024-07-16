@@ -94,7 +94,7 @@ DEFAULT_CONFIGS = OrderedDict([
 ])
 
 
-DATASET_PATH = Path().home() / ".matk" / "DATASETS"
+DATASET_PATH = Path().home() / ".cryovia" / "DATASETS"
 
 def logical_process(pipe, device="GPU"):
     import tensorflow as tf
@@ -484,7 +484,6 @@ class Dataset:
             for item in tqdm(os.listdir(directory_path)):
                 item_path = Path(directory_path) / item
                 if item_path == output_filename:
-                    print(item_path)
                     continue
                 
                 tar.add(item_path, arcname=item)
@@ -494,9 +493,7 @@ class Dataset:
                     
                 else:
                     files_to_remove.append(item_path)
-        # print(self.isZipped)
-        # print(files_to_remove)
-        # print(dirs_to_remove)
+
         
         for file in files_to_remove:
             os.remove(file)
@@ -779,7 +776,6 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                         seg_path = wrapper.directory / "segmentation.npz"
                         if seg_path.exists():
                             analyser.segmentation_path_ = seg_path 
-                        # print("Finished creating analyser")
                     
                     if len(analyser.membranes) == 0:
                         path = analyser.save()
