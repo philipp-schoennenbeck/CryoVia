@@ -303,6 +303,9 @@ class Analyser:
         if self.empty:
             return
         self.createMembranes(pool)
+
+
+
     
     @property
     def dataset(self):
@@ -311,6 +314,7 @@ class Analyser:
     @property
     def segmentation_path(self):
         return self.segmentation_path_
+
     @segmentation_path.setter
     def segmentation_path(self, value):
         self.segmentation_path_ = Path(value)
@@ -390,10 +394,10 @@ class Analyser:
 
 
     
-    def segmentation(self, model):
-        if model is not None and not self.segmentation_path.exists():
-            #TODO:segmentation
-            pass
+    # def segmentation(self, model):
+    #     if model is not None and not self.segmentation_path.exists():
+    #         #TODO:segmentation
+    #         pass
     
 
 
@@ -450,9 +454,26 @@ class Analyser:
         new_stack = sparse.as_coo(np.array(new_stack).astype(np.uint8))
         self.segmentation_stack = new_stack
 
-        
+    def findClosestVesicles(self):
+        for membrane in self.membranes:
+            _ = membrane.min_distance_to_closest_vesicle
 
     def findNeighbours(self, max_distance=150, estimate_new_vectors=True):
+        """
+        Finds neighboring points within a specified maximum distance.
+
+        This method identifies neighboring points based on the given maximum
+        distance. Optionally, it can also estimate new vectors for these neighbors.
+
+        Args:
+            max_distance (float, optional): The maximum distance within which to 
+                search for neighbors. Defaults to 150.
+            estimate_new_vectors (bool, optional): If True, new vectors will be 
+                estimated for the neighbors found. Defaults to True.
+
+        Returns:
+ 
+        """
         if max_distance is None:
             if self.max_distance is None:
                 return
@@ -652,11 +673,26 @@ class Analyser:
 
 
     def estimateCurvature(self, favor_positive_curvature=True, max_neighbour_dist=200, gaussian_filter_size=9, pool=None):
-        """Estimate the curvature at each point by fitting a circle to neighbourhood points
-        Parameters:
-        favor_positive_curvature, bool: To make the curvature of different segments more uniform, multiply curvature of all the 
-                                        points of a segment by -1 if more than half of the values are <0 
-        max_neighbour_dist, float: the maximum neighbour distance for the fitting of the circle"""
+        """
+        Estimates the curvature of elements in a dataset.
+
+        This method calculates the curvature of points, with an option to favor
+        positive curvature values. It uses neighboring points within a specified
+        maximum distance and applies a Gaussian filter to smooth the results.
+
+        Args:
+            favor_positive_curvature (bool, optional): If True, the method will 
+                prioritize positive curvature values. Defaults to True.
+            max_neighbour_dist (int, optional): The maximum distance to consider 
+                for neighboring points when estimating curvature. Defaults to 200.
+            gaussian_filter_size (int, optional): The size of the Gaussian filter 
+                used for smoothing the curvature estimates. Defaults to 9.
+            pool (multiprocessing.Pool, optional): A pool of worker processes for 
+                parallel computation. If None, the computation will be done 
+                sequentially. Defaults to None.
+        Returns
+        all_curavtures (dict) : Dictionary of all the curavture values with membrane indexes as keys
+        """
         
        
         def matlab_style_gauss(size=21,sigma=10):
@@ -850,7 +886,22 @@ class Analyser:
 
 
     def estimateThickness(self, max_neighbour_dist=150, min_thickness=20, max_thickness=70, pool=None, sigma=2, no_multiprocessing=False ):
+        """
+        Estimates the thickness of points for all membranes.
 
+        This method calculates the thickness of points based the density values around neighboring points within a specified maximum distance. 
+        It also applies a Gaussian filter to smooth the results and provides options for multiprocessing.
+
+        Args:
+            max_neighbour_dist (int, optional): The maximum distance to consider for neighboring points when estimating thickness. Defaults to 150.
+            min_thickness (int, optional): The minimum allowable thickness. Defaults to 20.
+            max_thickness (int, optional): The maximum allowable thickness. Defaults to 70.
+            pool (multiprocessing.Pool, optional): A pool of worker processes for parallel computation. If None, the computation will be done sequentially. Defaults to None.
+            sigma (float, optional): The standard deviation for Gaussian kernel used in smoothing the thickness estimates. Defaults to 2.
+            no_multiprocessing (bool, optional): If True, disables the use of multiprocessing even if a pool is provided. Defaults to False.
+
+        Returns:
+        """
        
         
         def create_distance_map(pool):
@@ -980,7 +1031,19 @@ class Analyser:
         return
 
     def predictShapes(self, predictor:Path):
-        
+        """
+        Predicts shapes of all vesicles using the specified shape classifier.
+
+        This method applies a shape prediction model provided by the predictor to 
+        elements in the dataset, generating predictions for each element.
+
+        Args:
+            predictor (Path): A Path object pointing to the shape prediction model 
+                to be used for making predictions.
+
+        Returns:
+
+        """
         if isinstance(predictor, (str, Path)):
             with open(predictor, "rb") as file:
                 predictor = CustomUnpickler(file).load()
@@ -1004,7 +1067,20 @@ class Analyser:
 
 
     def identifyIceContaminations(self, pool=None):
-         
+        """
+        Calculates a value for the vesicles being ice contamination by comparing the density values inside and outside.
+
+        This method detects ice contaminations in the dataset. It can utilize 
+        parallel processing if a multiprocessing pool is provided.
+
+        Args:
+            pool (multiprocessing.Pool, optional): A pool of worker processes for 
+                parallel computation. If None, the computation will be done 
+                sequentially. Defaults to None.
+
+        Returns:
+
+        """
 
         # if pool is None: 
         #     for membrane in self.membranes:
@@ -1028,6 +1104,15 @@ class Analyser:
 
 
     def findEnclosedVesicles(self):
+        """
+        Identifies vesicles enclosed by other.
+
+        Args:
+            None
+
+        Returns:
+            
+        """
         idxs_to_use = []
         areas = []
         for idx, membrane in enumerate(self.membranes):
@@ -1085,6 +1170,23 @@ class Analyser:
 
     @staticmethod
     def save_all(analysers, njobs=1, pool=None):
+        """
+        Saves the state of all analyzers in the list.
+
+        This static method saves the state of each analyzer in the provided list of 
+        analyzers. It supports parallel processing to speed up the saving process 
+        if a multiprocessing pool is provided.
+
+        Args:
+            analysers (list): A list of analyzer objects whose state needs to be saved.
+            njobs (int, optional): The number of jobs to run in parallel. Defaults to 1.
+            pool (multiprocessing.Pool, optional): A pool of worker processes for 
+                parallel computation. If None, the computation will be done sequentially. 
+                Defaults to None.
+
+        Returns:
+            None
+        """
         
             
         if njobs <= 1 and pool is None:
@@ -1099,8 +1201,23 @@ class Analyser:
       
 
     def save(self, save_path=None, protocol=0,remove_neighbours=True, larch=False):
-        # if larch:
-        #     import larch.pickle as pickle
+        """
+        Saves the state of this analyser.
+
+        This static method saves the state of each analyzer in the provided list of 
+        analyzers. It supports parallel processing to speed up the saving process 
+        if a multiprocessing pool is provided.
+
+        Args:
+            save_path (Path, optional): Path where to save this analyser
+            protocol (int, optional): which pickle protocol to use
+            remove_neighbours: redundant
+            larch           : redundant
+
+
+        Returns:
+            wrapper_dir (path) : the directory of the wrapper
+        """
         
         if save_path is None:
             save_path = self.dataset_path / (self.micrograph_path.stem + ".pickle")
@@ -1124,6 +1241,24 @@ class Analyser:
 
     
     def createImprovedSegmentation(self, config,stepSize=None):
+        """
+        Creates an image stack the segmentation with improved segmentation as 1 and not improved as 2. 
+
+        This method is used extracting patches for specific segmentation model training
+
+        Args:
+            config (config): the config of the segmentation model
+            stepSize : the stepSize for the patches to extract
+        
+
+
+        Returns:
+            segPatches : the extracted patches of the segmentations
+            dataPatches: the extracted patches of the micrographs
+
+        """
+
+
         from cryovia.gui.segmentation_files.prep_training_data import patchify
         improvedSeg = np.zeros((self.segmentation_shape), np.uint8)
         self.only_closed = False
@@ -1159,61 +1294,38 @@ class Analyser:
 
         
 
-    # def load_marsh_only(path, protocol=4, njobs=1, pool=None, refind_neighbours=True):
-    #     if isinstance(path, (str, Path)):
-    #         with open(path, "rb") as f:
-    #             ms = marshal.load(f)
-    #             return ms
-           
-    #     elif isinstance(path, (list, tuple, set)):
-            
-    #         if njobs <= 1 and pool is None:
-
-    #             return [Analyser.load_marsh_only(element, protocol, 0, None, refind_neighbours) for element in path]
-    #         elif pool is not None:
-    #             results = [pool.apply_async(Analyser.load_marsh_only, args=[element, protocol, 0, None, refind_neighbours]) for element in path]
-    #             return [res.get() for res in results]
-    #         else:
-    #             with mp.get_context("spawn").Pool(njobs) as pool:
-    #                 results = [pool.apply_async(Analyser.load_marsh_only, args=[element, protocol, 0, None, refind_neighbours]) for element in path]
-    #                 return [res.get() for res in results]
-    #     else:
-    #         raise AttributeError(f"Cannot load marshal object from {type(path)} type.")
-
-    # @staticmethod
-    # def load_marshal(path, protocol=4, njobs=1, pool=None, refind_neighbours=True):
-    #     if isinstance(path, (str, Path)):
-    #         with open(path, "rb") as f:
-    #             ms = marshal.load(f)
-    #             analyser = Analyser(None, None, None, create_empty_analyser=True)
-    #             analyser.read_marshalable_object(ms)
-    #         for membrane in analyser.membranes:
-    #             membrane.analyser_ = analyser
-    #         if refind_neighbours:
-    #             analyser.findNeighbours()
-    #         return analyser
-    #     elif isinstance(path, (list, tuple, set)):
-            
-    #         if njobs <= 1 and pool is None:
-
-    #             return [Analyser.load_marshal(element, protocol, 0, None, refind_neighbours) for element in path]
-    #         elif pool is not None:
-    #             results = [pool.apply_async(Analyser.load_marshal, args=[element, protocol, 0, None, refind_neighbours]) for element in path]
-    #             return [res.get() for res in results]
-    #         else:
-    #             with mp.get_context("spawn").Pool(njobs) as pool:
-    #                 results = [pool.apply_async(Analyser.load_marshal, args=[element, protocol, 0, None, refind_neighbours]) for element in path]
-    #                 return [res.get() for res in results]
-    #     else:
-    #         raise AttributeError(f"Cannot load Analyser from {type(path)} type.")
+   
 
 
     def remove_indexes(self, indexes):
+        """
+        Removes membranes from the analyser at specified indexes.
+
+
+        Args:
+            indexes (list): A list of indexes indicating which membranes to remove 
+                from the analyser.
+
+        Returns:
+            None
+        """
         indexes = set(indexes)
         usable_indexes = set([m.membrane_idx for m in self.membranes_ if m.membrane_idx not in indexes])
         self.remove_all_other_indexes(usable_indexes)
 
     def remove_all_other_indexes(self, indexes):
+        """
+        Removes all membranes from the analyser except those at specified indexes.
+
+  
+
+        Args:
+            indexes (list): A list of membrane indexes indicating which membranes to retain in 
+                the analyser.
+
+        Returns:
+            None
+        """
         indexes = sorted(indexes)
         try:
             before_shape = self.segmentation_stack.shape
@@ -1229,9 +1341,27 @@ class Analyser:
         for counter, membrane in enumerate(new_membranes):
             membrane.membrane_idx = counter
         self.membranes_ = new_membranes
+        for membrane in self.membranes:
+            membrane.min_distance_to_closest_vesicle = None
+            membrane.distance_to_enclosing_vesicle = None
+            membrane.is_enclosed_in = []
+            
+        self.findClosestVesicles()
+        self.findEnclosedVesicles()
+        for membrane in self.membranes:
+            _ = membrane.distance_to_enclosing_vesicle
+        
 
 
     def applyMask(self, mask):
+        """
+        Removes all membranes found not on the mask.
+        Args:
+            mask (list): A mask indicating where to keep membranes.
+
+        Returns:
+            None
+        """
         inverse_mask = np.logical_not(mask > 0)
         if any((i != j for i,j in zip(mask.shape, self.segmentation_stack.shape[1:]))):
             inverse_mask = utils.resizeSegmentation(inverse_mask, self.segmentation_shape)
@@ -1243,6 +1373,27 @@ class Analyser:
 
     @staticmethod
     def load(path, protocol=4, njobs=1, pool=None, refind_neighbours=False, type_="Analyser", rewrite_dir=False, dataset_path=None, index=None):
+        """
+        Loads in the specified type_
+
+  
+
+        Args:
+            path (Path): Path to load.
+            protocol (int, optional): Which pickle protocol to use
+            njobs (int, optional): The number of jobs to run in parallel. Defaults to 1.
+            pool (multiprocessing.Pool, optional): A pool of worker processes for 
+                parallel computation. If None, the computation will be done sequentially. 
+                Defaults to None.
+            refind_neighbours (bool, optional): redundant
+            type_ (string, optional): which type of object to load in. has to be one of Analyser, Json, Wrapper, csv or Segmentation
+            rewrite_dir (bool, optional): whether to rewrite the wrapper directory
+            dataset_path: (Path, optional): Path of the belonging dataset
+            index: (None, list of int, optional): Which indexes to remove
+
+        Returns:
+            analyser (List, type_) : single objet of type_ or list of type_
+        """
         type_list = ["Analyser", "Json", "Wrapper", "csv", "Segmentation"]
         if type_ not in type_list:
             raise ValueError(f"Parameter type_ ({type_}) is not in {type_list}")

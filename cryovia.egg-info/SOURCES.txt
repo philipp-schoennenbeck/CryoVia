@@ -50,7 +50,6 @@ cryovia/gui/Unpickler.py
 cryovia/gui/__init__.py
 cryovia/gui/dataset.py
 cryovia/gui/datasets_gui.py
-cryovia/gui/find_carbon_edge.py
 cryovia/gui/membrane_segmentation.py
 cryovia/gui/napari_seg_helper.py
 cryovia/gui/shape_classifier.py

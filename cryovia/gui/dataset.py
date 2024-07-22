@@ -117,6 +117,16 @@ def create_dir(path):
 
 
 def get_all_dataset_paths():
+    """
+    Extracts all the paths of the available datasets.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    dataset_paths : list of all paths
+    """
     global DATASET_PATH
     create_dir(DATASET_PATH)
     dataset_paths = []
@@ -129,6 +139,16 @@ def get_all_dataset_paths():
 
 
 def get_all_dataset_names():
+    """
+    Extracts the names of all the available datasets.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    names : set of dataset names
+    """
     all_paths = get_all_dataset_paths()
     names = []
     
@@ -141,25 +161,26 @@ def get_all_dataset_names():
 
 
 
-# DEFAULT_VALUES = {
-#     "Step size": 13,
-#     "Shape classifier":"Default",
-#     "Segmentation model":"Default",
-#     "Use only closed":True,
-#     "Minimum size":50,
-#     "Mask carbon":False,
-    
-# }
-
 def get_default_values():
     return DEFAULT_CONFIGS
 
 def dataset_factory(new=False, copy=False, **kwargs):
+    """
+    Loads a dataset or creates a new one.
+    Parameters
+    ----------
+    new    : bool, whether to create a new Dataset
+    copy   : bool, whether to copy the given dataset
+    kwargs : kwargs for the dataset creation
+    Returns
+    -------
+    
+    """
     global DATASET_PATH
     if new:
         return Dataset(**kwargs)
     if copy:
-        raise NotImplemented
+        raise NotImplementedError
     return Dataset.load(DATASET_PATH / kwargs["name"] / "dataset.pickle")
 
 class Dataset:
@@ -185,6 +206,16 @@ class Dataset:
 
 
     def save(self):
+        """
+        Save this dataset
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         self.changed()
         create_dir(self.dataset_path)
         create_dir(self.pickel_path)
@@ -198,6 +229,16 @@ class Dataset:
         self.times["Last changed"] = now.strftime("%m/%d/%Y, %H:%M:%S")
     
     def addMicrographPaths(self, paths):
+        """
+        Adds the paths as new micrograph paths for analysis.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         known_paths = set(self.micrograph_paths)
         for path in paths:
             if path not in known_paths:
@@ -207,6 +248,17 @@ class Dataset:
         self.save()
     
     def addSegmentationPaths(self, paths, replace=None):
+        """
+        Adds new segmentation paths to the micrograph paths.
+        Parameters
+        ----------
+        paths : the paths to add
+        replace : a tuple of strings, second value gets replaced by the first to look for micrograph names. If this is none, a similarity search is performed.
+
+        Returns
+        -------
+        
+        """
         
         seg_files = [path for path in self.segmentation_paths.values() if path is not None]
         seg_files.extend([Path(path) for path in paths])
@@ -236,17 +288,12 @@ class Dataset:
 
         self.save()
 
-    # def __setattr__(self, __name: str, __value) -> None:
-    #     if hasattr(self, __name):
-    #         self.__dict__[__name] = __value
-    #     elif hasattr(self, __name.replace(" ", "_").lower()):
-    #         self.__dict__[__name.replace(" ", "_").lower()] = __value
-    #     else:
-    #         raise AttributeError(f"Class \"Dataset\" has no attribute \"{__name}\"")
-    
 
     @property
     def csv(self):
+        """
+        Returns the csv dataframe with all information about the membranes
+        """
         csv_path = self.pickel_path / "membranes.csv"
         try:
             df = pd.read_csv(csv_path, header=0)
@@ -257,6 +304,17 @@ class Dataset:
         return df 
 
     def to_csv(self, njobs=50, csv=None):
+        """
+        Loads the data and writes the csv files.
+        Parameters
+        ----------
+        njobs : int, number of processes to load data
+        csv   : if None, loads the data and writes csv file, else writes csv in the csv file
+
+        Returns
+        -------
+        csv   : pandas dataframe
+        """
         
         if csv is None:
             if self.isZipped:
@@ -270,6 +328,16 @@ class Dataset:
         
 
     def complete_run_kwargs(self, run_kwargs):
+        """
+        Takes run arguments dictionary and completes the missing entries.
+        Parameters
+        ----------
+        run_kwargs : the run arguments to complete
+
+        Returns
+        -------
+        run_kwargs : the completed arguments dict
+        """
         default = get_default_values()
         for func, params in default.items():
             if func not in run_kwargs:
@@ -283,6 +351,23 @@ class Dataset:
         return run_kwargs
 
     def run(self, njobs=1,threads=10, gpu=None, only_segmentation=False, run_kwargs={}, use_csv=True, tqdm_file=sys.stdout, stopEvent=None):
+        """
+        Runs the analysis on all available micrographs with the given parameters
+        Parameters
+        ----------
+        njobs       : number of parallel processes
+        threads     : number of threads
+        gpu         : gpus to use as given by "get logical devices"
+        only_segmentation : Whether to run only the segmentation
+        run_kwargs  : the arguments for the analysis
+        use_csv     : bool, whether to look up the csv file and remove the missing entries also in the analysis
+        tqdm_file   : where to print out tqdm progress bar
+        stopEvent   : an event to stop the analysis
+
+        Returns
+        -------
+        
+        """
         if self.isZipped:
             raise ValueError(f"Cannot perform actions because {self.name} is still zipped. Unzip the dataset first.")
         from keras.backend import clear_session
@@ -437,6 +522,16 @@ class Dataset:
         return analysers, args
     
     def remove(self, remove_data=False):
+        """
+        Removes this dataset.
+        Parameters
+        ----------
+        remove_data : bool, whether to also remove all the analysed data or only the dataset pickle file and the csv file
+
+        Returns
+        -------
+        
+        """
 
         if remove_data:
             if self.isZipped:
@@ -468,6 +563,16 @@ class Dataset:
         return self.zip_path.exists()
 
     def zip(self):
+        """
+        Zips the dataset to reduce size and file number
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if self.isZipped:
             return
         files_to_remove = []
@@ -501,6 +606,16 @@ class Dataset:
             shutil.rmtree(directory)
 
     def unzip(self):
+        """
+        Unzip the dataset if it is zipped
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if not self.isZipped:
             raise ValueError(f"Cannot unzip {self.name}. It is not zipped.")
         archive_path = self.zip_path
@@ -511,6 +626,16 @@ class Dataset:
 
 
     def rename(self, new_name):
+        """
+        Rename this dataset and change the corresponding attributes 
+        Parameters
+        ----------
+        new_name : the new name to rename the dataset to
+
+        Returns
+        -------
+        
+        """
         global DATASET_PATH
         datasets = get_all_dataset_names()
         if new_name in datasets:
@@ -550,6 +675,18 @@ class Dataset:
         self.save()
 
     def removeMicrographPaths(self, idxs=None, paths=None, all=False):
+        """
+        Removes the given micrograph from this dataset and removes the segmentation and analysers too.
+        Parameters
+        ----------
+        idxs     : list of indexes to remove
+        paths    : list of paths to remove
+        all      : bool, whether to remove all paths
+
+        Returns
+        -------
+        
+        """
         def removeIdx(idx):
             micrograph = self.micrograph_paths[idx]
             if micrograph in self.segmentation_paths:
@@ -589,7 +726,21 @@ class Dataset:
     
 
     def load_data(self, njobs=1, type_="Analyser", rewrite_dir=False, max_=None, use_csv=False):
-        """Updates from csv only applies if type_ is Analyser"""
+        """
+        Load the data of the specific type.
+        Updates from csv only applies if type_ is Analyser
+        Parameters
+        ----------
+        njobs      : number of parallel processes to load the data
+        type_      : type of data to load, can be Analyser, Json, Wrapper, csv or Segmentation
+        rewrite_dir: bool, whether to save the analyser again after loading (useful to remove deleted membranes from the csv)
+        max_       : maximum number of analyser, wrappers etc to load
+        use_csv    : bool, whether to use the csv file to remove deleted membranes
+        Returns
+        -------
+        data       : the data of the provided type
+        """
+
         micrograph_paths = [m for m in self.micrograph_paths if m in self.analysers]
         if use_csv:
             csv = self.csv
@@ -607,7 +758,7 @@ class Dataset:
         if type_ == "Json":
             data = {value["Micrograph"]:value["Points"] for value in data}
         if type_=="Analyser" and use_csv:
-            self.to_csv()
+            self.to_csv(njobs=njobs)
         return data
         
     def __len__(self):
@@ -631,6 +782,16 @@ class Dataset:
 
 
     def copy(self, save_dir:Path):
+        """
+        Create a copy of this dataset and all its data
+        Parameters
+        ----------
+        save_dir    : the directory where to save the new copy
+
+        Returns
+        -------
+        inst        : the new dataset object
+        """
         if self.isZipped:
             raise ValueError(f"Cannot perform actions because {self.name} is still zipped. Unzip the dataset first.")
         name = self.name
@@ -671,6 +832,16 @@ class Dataset:
 
     @staticmethod
     def load(p):
+        """
+        Load the dataset by the given path.
+        Parameters
+        ----------
+        p   : Path to the dataset to load
+
+        Returns
+        -------
+        inst    : the loaded dataset object
+        """
         
         global DATASET_PATH
         path = Path(p)
@@ -721,6 +892,9 @@ def print_error(error):
     print(error, flush=True)
 
 def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path ):
+    """
+    Run the analysis, only called by the run method of datasets.
+    """
     try:
         with mp.get_context("fork").Pool(njobs) as pool:
             while True:

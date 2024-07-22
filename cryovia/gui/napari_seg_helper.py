@@ -209,6 +209,16 @@ class SegmentationHelper(QWidget):
         self.saveDir_ = Path(value)
     
     def loadFiles(self):
+        """
+        Loads in files given by a QFileDialog and opens the first one.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         dlg = QFileDialog()
 
         file_suffixes = " *".join([".mrc", ".rec", ".MRC", ".REC", ".png", ".jpg", ".jpeg"])
@@ -245,6 +255,16 @@ class SegmentationHelper(QWidget):
                 self.openNextImage()
 
     def chooseSaveDir(self):
+        """
+        Opens a file dialog to chose a save directory
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         directory = QFileDialog.getExistingDirectory(caption="Choose directory for saving segmentation files")
         if not isinstance(directory, (str, Path)) or len(directory) == 0:
 
@@ -255,6 +275,16 @@ class SegmentationHelper(QWidget):
         self.saveDir = directory
 
     def closeLayers(self):
+        """
+        Closes the current layers.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         name = self.getName()
         seg_name = self.getSegmentationName()
         
@@ -272,6 +302,16 @@ class SegmentationHelper(QWidget):
 
 
     def openNextImage(self, direction=1):
+        """
+        Opens the next image and saves the current segmentation
+        Parameters
+        ----------
+        direction : int: the direction of which is the next file 
+
+        Returns
+        -------
+        
+        """
         if len(self.files) == 0:
             return
         if isinstance(direction, bool):
@@ -334,12 +374,33 @@ class SegmentationHelper(QWidget):
         label.mode = "paint"
         
     def shortenString(self, string, max_length=20):
+        """
+        Shortens a string to a maximum size.
+        Parameters
+        ----------
+        string     : the string to shorten
+        max_length : the maximum size of the string
+
+        Returns
+        -------
+        string     : the shortened string
+        """
         if len(string) <= max_length:
             return string
         else:
             return string[:max_length//2 -1 ] + ".." + string[-max_length//2 +1:]
     
     def getName(self, full=False):
+        """
+        Returns the name of the current file.
+        Parameters
+        ----------
+        full    : bool: Whether to return the full name or shortened
+
+        Returns
+        -------
+        name    : the name of the current file
+        """
         if len(self.files) > 0:
             file = self.files[self.idx]
             if full:
@@ -357,6 +418,16 @@ class SegmentationHelper(QWidget):
 
 
     def applyLowPassFilter(self):
+        """
+        Applies low pass filter of the current file.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         def low_pass_filter(image, cutoff_frequency):
             # Compute the 2D Fourier transform of the image
             image_fft = fft2(image)
@@ -403,6 +474,16 @@ class SegmentationHelper(QWidget):
     
 
     def applyHighPassFilter(self):
+        """
+        Applies high pass filter of the current file.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         def gauss(fx,fy,sig):
 
             r = np.fft.fftshift(np.sqrt(fx**2 + fy**2))
@@ -434,19 +515,8 @@ class SegmentationHelper(QWidget):
             print(e)
             return
         
-        # if self.files[self.idx].suffix.lower() in [".mrc", ".rec"]:
-        #     read = mrc_reader_function(self.files[self.idx])[0]
-        #     img = read[0]
-        #     pixel_size = read[1]["metadata"]["pixel_spacing"]
-        # else:
-        #     img = load_file(self.files[self.idx])
-        #     pixel_size = self.nonMrcPixelSize
 
-        # if not np.isclose(pixel_size, self.pixelSize):
-        #     shape = [int(s * pixel_size / self.pixelSize) for s in img.shape]
-        #     img = fft_rescale_image(img, shape)
         img = layer.data
-        # to_size = 100
         sig = int(1500 / self.pixelSize)
         sig += (sig + 1) % 2
         high_passed = gaussian_filter(img,0,self.pixelSize) - gaussian_filter(img,sig,self.pixelSize)
@@ -469,6 +539,16 @@ class SegmentationHelper(QWidget):
         return self.saveDir / (name + ".npz")
 
     def saveSegmentation(self):
+        """
+        Saves the current segmentation.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         try:
             segmentation = self.viewer.layers[self.getSegmentationName()].data
         except Exception as e:
@@ -518,6 +598,16 @@ class SegmentationHelper(QWidget):
         return True
 
     def labelUp(self, dummy=None):
+        """
+        Adds a new layer to the segmentation and increases the label counter by one
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         segname = self.getSegmentationName()
 
         if len(segname) > 0 and segname in self.viewer.layers:
@@ -533,6 +623,16 @@ class SegmentationHelper(QWidget):
            
     
     def labelDown(self, dummy=None):
+        """
+        Goes to the previous label layer of the segmentation.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         segname = self.getSegmentationName()
 
         if len(segname) > 0 and segname in self.viewer.layers:
@@ -545,6 +645,16 @@ class SegmentationHelper(QWidget):
             
 
     def createThreeDStack(self, data):
+        """
+        Creates a stack of segmentation images. One image for each connected component.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         def solveLayer(layer):
             unique_labels = np.unique(layer)
             if len(unique_labels) > 2:
@@ -595,6 +705,16 @@ class SegmentationHelper(QWidget):
 
 
     def calcStack(self, dummy=None):
+        """
+        Calculates the shown segmentation stack as a summed up image.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         segname = self.getSegmentationName()
 
         if len(segname) > 0 and segname in self.viewer.layers:
@@ -621,6 +741,16 @@ class SegmentationHelper(QWidget):
                 
 
     def removeSlice(self, dummy):
+        """
+        Remove a slice of the segmentation stack.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if len(self.current_label_layer_name) > 0:
             if self.threed_checkbox.isChecked():
                 nr_of_slices = self.viewer.layers[self.current_label_layer_name].data.shape[0]

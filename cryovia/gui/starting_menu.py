@@ -16,6 +16,16 @@ CRYOVIA_PATH = Path().home() / ".cryovia"
 
 
 def copyShapeCurvatures():
+    """
+    Finds the installation path of CryoVia and copies the default curvature files to the CryoVia directory.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
     default_path = cryovia_install_dir /"default_models"/ "Shape_curvatures"
@@ -29,6 +39,16 @@ def copyShapeCurvatures():
     
 
 def checkDefaultClassifier():
+    """
+    Checks if the default shape classifier already exists. If not, copy them from the installation path.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
     for c in ["Default_NN", "Default_GBC"]:
@@ -43,6 +63,16 @@ def checkDefaultClassifier():
             print(f"Copy default classifier")
 
 def checkDefaultSegmentationModel():
+    """
+    Checks if the default segmentation model already exists. If not, copy them from the installation path.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
 
@@ -63,6 +93,16 @@ def checkDefaultSegmentationModel():
 
 
 def copyDataFiles(copy_shapes=False):
+    """
+    Checks for default classifier and segmentation model.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global CRYOVIA_PATH
     checkDefaultClassifier()
     checkDefaultSegmentationModel()
@@ -75,6 +115,16 @@ def copyDataFiles(copy_shapes=False):
 
 
 def checkFirstTime():
+    """
+    Creates the cryovia directories if they do not exist and then copies some files.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global CRYOVIA_PATH
     dirs = ["DATASETS", "Classifiers", "SegmentationModels",]
     for d in dirs:
@@ -106,6 +156,9 @@ def create_temp_dir():
     CRYOVIA_TEMP_DIR.mkdir(parents=True)
 
 class CentralWidget(QWidget):
+    """
+    The widget from which to start the other windows.
+    """
     def __init__(self, parent):
         super().__init__(parent)
         cryovia_install_dir = Path(cryovia.__file__).parent
@@ -147,25 +200,39 @@ class CentralWidget(QWidget):
 
 
     def open_drawer(self):
+        """
+        Opens the shape classifier window.
+        """
         self.current_window = CreateNewShapesWindow(custom_parent=self)
         # self.current_window.show()
         self.open_window()
 
     def open_edge_detector(self):
+        """
+        Opens the edge detector window.
+        """
         self.current_window = MainWindow(custom_parent=self)
         self.open_window()
 
 
     def open_segmentator(self):
+        """
+        Opens the neural network training window.
+        """
         self.current_window = SegmentationWindow(custom_parent=self)
         self.open_window()
 
     def open_analyser(self):
+        """
+        Opens the analyser window.
+        """
         self.current_window = DatasetGui(custom_parent=self)
         self.open_window()
 
     def open_window(self):
-
+        """
+        Opens the current selected window.
+        """
 
 
         if self.current_window is not None:
@@ -175,6 +242,9 @@ class CentralWidget(QWidget):
 
 
     def child_closed(self):
+        """
+        Enables the opening of other windows when one window is closed.
+        """
         if self.current_window is not None:
             self.current_window = None
         self.setEnabled(True)
@@ -226,6 +296,17 @@ class StringListParamType(click.ParamType):
                type=click.IntRange(1,mp.cpu_count(),clamp=True), default=max(1, mp.cpu_count() // 2))
 @click.option("-g", "--gpus", help="List of GPUs to be available to use (as integers in cuda), seperated by comma without spaces. Default is all available GPUs.", type=StringListParamType())
 def startGui(njobs, gpus):
+    """
+    Starts the CryoVia GUI.
+    Parameters
+    ----------
+    njobs   : number of parallel threads for some internal usage.
+    gpus    : list of GPUs to use.
+
+    Returns
+    -------
+    
+    """
     
 
     if gpus is not None:
@@ -240,6 +321,15 @@ def show_error_popup(etype, evalue,tb):
 
 
 def GUI():
+    """
+    Runs the GUI.
+    ----------
+
+
+    Returns
+    -------
+    
+    """
     global cryovia, CreateNewShapesWindow, SegmentationWindow, segmentationModel, Config, DatasetGui, Dataset, MainWindow
     cryovia = __import__("cryovia", globals(), locals())
     CreateNewShapesWindow = __import__("cryovia.gui.shape_drawer", globals(), locals()).gui.shape_drawer.CreateNewShapesWindow

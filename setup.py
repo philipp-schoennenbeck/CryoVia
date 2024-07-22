@@ -31,7 +31,7 @@ setup(
         'scipy',
         'opencv-python',
         # 'sknw==0.13',
-        'napari[all]',
+        'napari[all]==0.4.19',
         'matplotlib',
         "pandas",
         "pyqtgraph",

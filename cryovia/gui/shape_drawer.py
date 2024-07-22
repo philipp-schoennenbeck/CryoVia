@@ -26,6 +26,9 @@ from PIL import Image, ImageOps
 cryovia_TEMP_DIR = Path().home() / ".cryovia" / "temp"
 
 class ShapeDrawingWindow(QLabel):
+    """
+    A window to draw shapes in for a shape classifier to train on.
+    """
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.myPenColorOn = Qt.red   
@@ -81,6 +84,16 @@ class ShapeDrawingWindow(QLabel):
 
 
 def QPixmapToArray(pixmap:QPixmap):
+    """
+    Converts QPixmap to a numpy array.
+    Parameters
+    ----------
+    pixmap  : A Qpixmap to convert.
+
+    Returns
+    -------
+    img     : numpy array
+    """
     ## Get the size of the current pixmap
 
     size = pixmap.size()
@@ -140,6 +153,16 @@ class CalcCurvatureWorker(QObject):
 
 
     def create_augmented_images(self ):
+        """
+        Creates augmentation of the given images. Can augment sizes, flips and rotations.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        new_images : numpy arrays
+        """
         
         new_images = [self.image]
 
@@ -166,6 +189,16 @@ class CalcCurvatureWorker(QObject):
 
 
     def calc_curvature(self, new_images):
+        """
+        Calculates the curvature of shapes in new_images
+        Parameters
+        ----------
+        new_images : numpy arrays with binary shapes
+
+        Returns
+        -------
+        curvatures : curvatures of each image
+        """
         curvatures = []
         
         for img in new_images:

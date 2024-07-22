@@ -2,7 +2,7 @@ numpy==1.24.1
 mrcfile
 scipy
 opencv-python
-napari[all]
+napari[all]==0.4.19
 matplotlib
 pandas
 pyqtgraph

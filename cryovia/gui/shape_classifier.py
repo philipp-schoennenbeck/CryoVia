@@ -20,6 +20,16 @@ PROTECTED_SHAPES = set(["sphere", "hourglass", "pear", "prolate", "stomatocyte",
 
 
 def create_dir(path):
+    """
+    Creates the directory at given path
+    Parameters
+    ----------
+    path : Path to directory
+
+    Returns
+    -------
+    
+    """
     
     if path.exists():
         return
@@ -28,6 +38,16 @@ def create_dir(path):
 
 
 def get_all_classifier_paths():
+    """
+    Extracts all the paths of shape classifier files.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    classifiers_paths : list of all the paths
+    """
     global CLASSIFIER_PATH
     create_dir(CLASSIFIER_PATH)
     classifiers_paths = []
@@ -39,6 +59,17 @@ def get_all_classifier_paths():
     return classifiers_paths
 
 def get_classifier_dict():
+    """
+    Extracts all the paths of shape classifier files and returns a dictionary with name as key and path as vale.
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    names : dict of classifiers
+    
+    """
     all_paths = get_all_classifier_paths()
     names = {}
     length_of_suffix = len("_classifier.pickle")
@@ -49,6 +80,16 @@ def get_classifier_dict():
     return names
 
 def get_all_classifier_names():
+    """
+    Extracts all the names of available classifiers
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    names : set of classifier names
+    """
     all_paths = get_all_classifier_paths()
     names = []
     length_of_suffix = len("_classifier.pickle")
@@ -59,6 +100,17 @@ def get_all_classifier_names():
     return set(names)
 
 def get_all_shape_curvature_paths():
+    """
+    Extracts all the paths of shape curvature files
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    shape_curvature_paths : list of paths
+    
+    """
     global SHAPE_CURVATURE_PATH
     create_dir(SHAPE_CURVATURE_PATH)
     shape_curvature_paths = []
@@ -70,12 +122,25 @@ def get_all_shape_curvature_paths():
     return shape_curvature_paths
 
 def get_all_shapes():
+    """
+    Extracts the names of avilable shape curvatures
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    names : set of all the available names
+    """
     all_shape_curvature_paths = get_all_shape_curvature_paths()
     return set([path.stem for path in all_shape_curvature_paths])
 
 
 
 class ShapeClassifier(object):
+    """
+    Model to classify shapes by curvature
+    """
     def __init__(self, name=None,):
         
         self.name = name
@@ -91,6 +156,9 @@ class ShapeClassifier(object):
         
     @property
     def only_closed(self):
+        """
+        Whether to only used closed vesicles.
+        """
         return self.only_closed_
     
     @only_closed.setter
@@ -103,6 +171,9 @@ class ShapeClassifier(object):
 
     @property
     def type(self):
+        """
+        Whether the classifier uses a neural network or Gradient Boosting
+        """
         return self.type_
     
     @type.setter
@@ -115,6 +186,16 @@ class ShapeClassifier(object):
     
 
     def changeClassifier(self, type_="GradientBoostingClassifier"):
+        """
+        Change the type of this classifier
+        Parameters
+        ----------
+        type_   : The type to change to. Has to be NeuralNetwork or GradientBoostingClassifier
+
+        Returns
+        -------
+        type_ : the type of model this classifier uses
+        """
         if not self.writable:
             return self.type_
         if self.type_ == type_:
@@ -132,10 +213,23 @@ class ShapeClassifier(object):
     
     @property
     def nnWeightsPath(self):
+        """
+        The path to this classifier weights.
+        """
         global CLASSIFIER_PATH
         return CLASSIFIER_PATH / f"{self.name}_weights.h5"
     
     def create_gbc(self):
+        """
+        Creates the Gradient boosting classifier
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         self.gbc = GradientBoostingClassifier()
         self.changed = True
 
@@ -163,9 +257,29 @@ class ShapeClassifier(object):
 
     
     def saveWeights(self, model):
+        """
+        Save the weights of the given model
+        Parameters
+        ----------
+        model : Classifier
+
+        Returns
+        -------
+        
+        """
         model.save(self.nnWeightsPath,save_format="h5")
     
     def loadWeightsAndModel(self):
+        """
+        Loads the current model and its weights.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if self.nnWeightsPath.exists():
             model = createNeuralNetworkClassifier(self.lastTrainedClasses, 100)
             cpus = list_logical_devices('CPU')
@@ -177,7 +291,21 @@ class ShapeClassifier(object):
             return createNeuralNetworkClassifier(self.lastTrainedClasses, 100)
 
     def predict(self, curvature):
+        """
+        Predict the shapes of the given curvatures
+        Parameters
+        ----------
+        curvature : List of lists of curavture values to predict the shape for
+
+        Returns
+        -------
+        shapes : list of predicted shapes
+        probabilities: list of the probabilities of the predicted shapes
+        """
         def reorder(curvatures):
+            """
+            Reorder the given curvatures to be more uniform
+            """
             new_curvatures = np.zeros_like(curvatures)
             for i, curvs in enumerate(curvatures):
                 curvs = np.roll(curvs, -np.argmin(curvs))
@@ -234,6 +362,18 @@ class ShapeClassifier(object):
 
 
     def loadData(self, oneHot=False):
+        """
+        Load all the Data of the used shapes.
+        Parameters
+        ----------
+        oneHot : Bool, whether to return oneHot encoding for neural network
+
+        Returns
+        -------
+        all_curvatures : the curvature values loaded in
+        all_shapes     : the shape classes of the loaded curvature values
+        class_dict     : The dictionary of which oneHot encoding corresponds to which class
+        """
         global SHAPE_CURVATURE_PATH
         def read_file(shape):
             
@@ -349,34 +489,19 @@ class ShapeClassifier(object):
         
         return all_curvatures, all_shapes, class_dict
 
-    # def alternativeTrain(self):
 
-    #     all_curvatures, all_shapes = self.loadData(oneHot=True)
-    #     test_perc = 0.2
-    #     idxs = np.arange(len(all_shapes))
-    #     np.random.shuffle(idxs)
-    #     all_curvatures = np.expand_dims(all_curvatures, -1)
-    #     train_curvatures, test_curvatures, train_shapes, test_shapes = [],[],[],[]
-    #     for counter, idx in enumerate(idxs):
-    #         if counter > len(all_shapes) * test_perc:
-    #             train_curvatures.append(all_curvatures[idx])
-    #             train_shapes.append(all_shapes[idx])
-    #         else:
-    #             test_curvatures.append(all_curvatures[idx])
-    #             test_shapes.append(all_shapes[idx])
-
-    #     train_curvatures = np.array(train_curvatures)
-    #     test_curvatures = np.array(test_curvatures)
-    #     train_shapes = np.array(train_shapes, dtype=np.float32)
-    #     test_shapes = np.array(test_shapes, np.float32)
-
-    #     model = createNeuralNetworkClassifier(len(self.classes[0]), np.array(train_curvatures).shape[1])
-
-    #     model.fit(train_curvatures, train_shapes,validation_data=(test_curvatures, test_shapes), batch_size=64, epochs=50)
-
-    #     self.saveWeights(model)
 
     def train(self):
+        """
+        Train this classifier on the current given shapes.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if len(self.class_set) == 0:
             return
 
@@ -470,7 +595,20 @@ class ShapeClassifier(object):
 
 
     def create_copy(self):
+        """
+        Create a copy of this classifier
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        new_copy : The newly created classifier
+        """
         def find_new_name():
+            """
+            Finds a new name which has not been used yet
+            """
             names = get_all_classifier_names()
             counter = 1
             while True:
@@ -489,6 +627,16 @@ class ShapeClassifier(object):
         return new_copy
 
     def save(self, model=None):
+        """
+        Save this classifier and a given model
+        Parameters
+        ----------
+        model : A neural network model to save the weights for
+
+        Returns
+        -------
+        
+        """
         with open(self.path, "wb") as f:
             self.changed = False
             hooks = self.changed_hooks
@@ -519,6 +667,16 @@ class ShapeClassifier(object):
         
 
     def rename(self, new_name):
+        """
+        Renames this classifier and changes the corresponding paths
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if self.name == new_name or new_name in get_all_classifier_names():
             return
         if self.writable:
@@ -534,6 +692,16 @@ class ShapeClassifier(object):
                 os.remove(old_weights)
 
     def remove(self):
+        """
+        Remove this classifier if possible.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
         if self.writable:
             # print(f"Removing {self.name} : {self.path}")
             os.remove(self.path)
@@ -552,6 +720,16 @@ class ShapeClassifier(object):
 
 
     def add_class(self, cls):
+        """
+        Add a new class to this classifier if possible
+        Parameters
+        ----------
+        cls : the class to add
+
+        Returns
+        -------
+        
+        """
         if not self.writable:
             return
         self.class_set.add(cls)
@@ -563,6 +741,16 @@ class ShapeClassifier(object):
         self.changed = True
     
     def remove_class(self, cls):
+        """
+        Remove of a class from this classifier.
+        Parameters
+        ----------
+        cls : The class to remove
+
+        Returns
+        -------
+        
+        """
         if not self.writable:
             return
         self.class_set.discard(cls)
@@ -601,6 +789,19 @@ class ShapeClassifier(object):
         return self.name != "Default_GBC" and self.name != "Default_NN"
 
 def ShapeClassifierFactory(filepath=None, name=None, to_copy:ShapeClassifier =None, classifier=None):
+    """
+    Loads or creates a new shape classifier object.
+    Parameters
+    ----------
+    filepath     : The filepath to the classifier to load.
+    name         : The name of the new classifier.
+    to_copy      : A classifier to copy
+    classifier   : A classifier which just gets returned
+
+    Returns
+    -------
+    inst         : A classifier object
+    """
     if all([a is None for a in [filepath, name, to_copy, classifier]]):
         raise ValueError("Something shouldnt be None here.")
     if filepath is not None:
@@ -631,6 +832,9 @@ def ShapeClassifierFactory(filepath=None, name=None, to_copy:ShapeClassifier =No
 
 
 def createNeuralNetworkClassifierWithoutDevice(classes=["circle", "not_circle"], num_features=100):
+    """
+    Creates a new neural network without using "device
+    """
     
     model = Sequential()
     model.add(Conv1D(filters=64, kernel_size=7,padding="same", activation='relu', input_shape=(num_features,1)))
@@ -651,6 +855,9 @@ def createNeuralNetworkClassifierWithoutDevice(classes=["circle", "not_circle"],
 
 
 def createNeuralNetworkClassifier(classes=["circle", "not_circle"], num_features=100):
+    """
+    Creates a new neural network
+    """
     cpus = list_logical_devices('CPU')
     with device(cpus[0]) as d:
         model = Sequential()

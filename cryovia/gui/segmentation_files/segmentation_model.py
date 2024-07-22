@@ -8,7 +8,6 @@ import queue
 # from custom_config import custom_config
 from cryovia.gui.segmentation_files.losses import segmentationLoss
 # from cryovia.gui.segmentation_files.grid_remover import mask_carbon_edge_per_file
-import cryovia.gui.find_carbon_edge as fce
 from grid_edge_detector.carbon_edge_detector import find_grid_hole_per_file
 from grid_edge_detector.image_gui import mask_file
 
@@ -681,109 +680,7 @@ class segmentationModel:
     def print(self, value):
         self.print_ = value
 
-    # def predict(self, file_paths,gpu=None, remove_grid=False, identify_instances=False, kwargs={} ):
-    #     import tensorflow as tf
-    #     def test_batch_size(batch_size, model):
-    #         x_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,1), dtype=np.float32)
-    #         # y_batch = np.zeros((batch_size, self.config.input_shape, self.config.input_shape,2), dtype=np.float32)
-    #         try:
-    #             result = model.predict(x=x_batch, batch_size=batch_size, verbose=0)
-    #             return True
-    #         except Exception as e:
-    #             return False
-        
-    #     if gpu is None:
-    #         gpus = get_logical_devices("GPU")
-            
-    #         if len(gpus) > 0:
-    #             gpu = gpus[0]
-    #         else:
-    #             cpus = get_logical_devices('CPU')
-    #             gpu = cpus[0]
 
-        
-    #     results = {}
-    #     with tf.device(gpu):  
-    #         model = self.load()
-        
-    #         current_batch_size = self.config.max_batch_size
-    #         working_batch_size = None
-    #         tried_batch_sizes = set()
-            
-    #         while current_batch_size not in tried_batch_sizes:
-                
-    #             tried_batch_sizes.add(current_batch_size)
-    #             if current_batch_size == 0:
-    #                 self.currently_training = False
-    #                 return 
-    #             if test_batch_size(current_batch_size, model):
-    #                 working_batch_size = current_batch_size
-    #                 current_batch_size *= 2
-    #             else:
-    #                 current_batch_size = current_batch_size // 2
-    #             gc.collect()
-    #             tf.keras.backend.clear_session()
-    #             if current_batch_size > self.config.max_batch_size:
-    #                 break
-
-    #     times = {"patching":0,"prediction":0, "unpatchifying":0}
-    #     for path in tqdm(file_paths, desc="Segmentation"):
-    #         start = datetime.datetime.now()
-    #         with tf.device('/CPU:0'):
-
-    #             turned_patches_total = []
-
-    #             x_pred, shape = loadPredictData([path], self.config, )
-        
-
-    #             x_pred = self.normalize(x_pred)
-    #             x_pred = x_pred[0]
-    #             shape = shape[0]
-
-    #             for patch in x_pred:
-    #                 turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
-    #                 turned_patches_total.extend(turned_patches)
-    #             turned_patches = np.array(turned_patches_total)
-    #             # turned_patches = tf.constant(turned_patches)
-    #             turned_patches = tf.convert_to_tensor(turned_patches)
-    #         prediction = []
-    #         times["patching"] += (datetime.datetime.now() - start ).total_seconds()
-    #         start = datetime.datetime.now()
-    #         for i in range(0, len(turned_patches), working_batch_size):
-    #             prediction.append(model.predict(turned_patches[i:i+working_batch_size], batch_size=working_batch_size, verbose=0))
-    #             gc.collect()
-    #         prediction = np.concatenate(prediction)
-    #         times["prediction"] += (datetime.datetime.now() - start ).total_seconds()
-    #         start = datetime.datetime.now()
-    #         predictions = softmax(prediction, -1)
-    #         predicted_patches = []
-    #         for i in range(len(x_pred)):
-    #             turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
-
-    #             prediction = np.sum(turned_pred, 0)
-
-    #             predicted_patches.append(prediction)
-    #         predicted_patches = np.array(predicted_patches)
-    #         predicted_image, confidence = unpatchify(predicted_patches,shape, self.config, threshold=True, both=True)
-            
-    #         mask = None
-
-    #         if remove_grid:
-    #             mask = fce.mask_carbon_edge_per_file(path,  [kwargs["grid_remover"]["gridsize"]* 10000], kwargs["grid_remover"]["threshold"], self.config.pixel_size,to_resize=True)
-    #             # mask = mask_carbon_edge_per_file(path, [kwargs["grid_remover"]["gridsize"]* 10000], kwargs["grid_remover"]["threshold"], self.config.pixel_size,to_resize=True)
-
-    #         if identify_instances:
-
-    #             predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["instance_identifier"]["only_closed"])
-            
-
-
-    #         predicted_image = sparse.as_coo(predicted_image)
-    #         results[path] = predicted_image
-    #         times["unpatchifying"] += (datetime.datetime.now() - start ).total_seconds()
-    #     gc.collect()
-    #     tf.keras.backend.clear_session()
-    #     return results
     
     def predict_multiprocessing(self, file_paths, pixelSizes, gpu=None,  kwargs={}, njobs=2, threads=10,tqdm_file=sys.stdout,dataset_name="", stopEvent=None, seg_path=None, mask_path=None ):
         if stopEvent is None:

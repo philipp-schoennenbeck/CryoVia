@@ -5,6 +5,17 @@ import pickle
 
 
 class CustomUnpickler(pickle.Unpickler):
+    """
+
+    Parameters
+    ----------
+    a: b.
+
+
+    Returns
+    -------
+    c
+    """
 
 
     def find_class(self, module, name):

@@ -7,7 +7,6 @@ from scipy.special import softmax
 
 
 
-import cryovia.gui.find_carbon_edge as fce
 import cryovia.gui.segmentation_files.curvature_skeletonizer as cs
 
 from keras.callbacks import Callback
@@ -363,7 +362,6 @@ class PredictModelWorker(QObject):
                                                                   ring_width=parameters["ring_width"]*10000,detect_ring=parameters["detect_ring"], pixel_size=parameters["Pixel spacing"], wobble=parameters["wobble"],
                                                                   high_pass=parameters["high_pass_filter"])
                         mask = resizeSegmentation(mask, predicted_image.shape)
-                        # mask = fce.mask_carbon_edge_per_file(path, [self.prediction_params["grid_remover"]["params"]["gridsize"]* 10000], self.prediction_params["grid_remover"]["params"]["threshold"], self.config.pixel_size,to_resize=True)
                         
                         if self.prediction_params["save_intermediate_files"]:
                             save_path = self.save_dir / (path.stem + "_original_segmentation" +  self.prediction_params["suffix"]) 
