@@ -18,12 +18,12 @@ import shutil
 from cryovia.gui.shape_classifier import ShapeClassifier, ShapeClassifierFactory, get_all_classifier_paths, get_all_classifier_names, PROTECTED_SHAPES, SHAPE_CURVATURE_PATH, get_all_shapes
 import qimage2ndarray as q2np
 from PIL import Image, ImageOps
-# from cv2 import circle
-# from membrane_analysis_toolkit.graph_analysis.graph import *
+
+from cryovia.gui.path_variables import cryovia_TEMP_DIR
 
 
 
-cryovia_TEMP_DIR = Path().home() / ".cryovia" / "temp"
+# cryovia_TEMP_DIR = Path().home() / ".cryovia" / "temp"
 
 class ShapeDrawingWindow(QLabel):
     """

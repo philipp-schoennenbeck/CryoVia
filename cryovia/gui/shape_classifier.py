@@ -14,8 +14,12 @@ from keras.callbacks import ModelCheckpoint,ReduceLROnPlateau,EarlyStopping
 from tensorflow.config import list_logical_devices
 from tensorflow import device
 from scipy.interpolate.interpolate import interp1d
-CLASSIFIER_PATH = Path().home() / ".cryovia" / "Classifiers"
-SHAPE_CURVATURE_PATH = Path().home() / ".cryovia" / "Shape_curvatures"
+
+from cryovia.gui.path_variables import CLASSIFIER_PATH, SHAPE_CURVATURE_PATH
+
+
+# CLASSIFIER_PATH = Path().home() / ".cryovia" / "Classifiers"
+# SHAPE_CURVATURE_PATH = Path().home() / ".cryovia" / "Shape_curvatures"
 PROTECTED_SHAPES = set(["sphere", "hourglass", "pear", "prolate", "stomatocyte", "tube", "elongated_pear"])
 
 

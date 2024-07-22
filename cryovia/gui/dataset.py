@@ -30,6 +30,7 @@ from grid_edge_detector.carbon_edge_detector import find_grid_hole_per_file
 from cryovia.gui.segmentation_files.prep_training_data import load_file
 from cryovia.cryovia_analysis.custom_utils import resizeSegmentation
 from grid_edge_detector.image_gui import mask_file
+from cryovia.gui.path_variables import DATASET_PATH
 
 
 
@@ -68,14 +69,14 @@ DEFAULT_CONFIGS = OrderedDict([
 
     ])),
     ("estimateThickness",OrderedDict([
-        ("max_neighbour_dist",150.0),
+        ("max_neighbour_dist",300.0),
         ("min_thickness",20.0),
         ("max_thickness",70.0),
         ("sigma",2)
 ])),
 
     ("estimateCurvature",OrderedDict([
-         ("max_neighbour_dist",150.0)
+         ("max_neighbour_dist",300.0)
 ])),
 
     ("shapePrediction",OrderedDict([
@@ -94,7 +95,7 @@ DEFAULT_CONFIGS = OrderedDict([
 ])
 
 
-DATASET_PATH = Path().home() / ".cryovia" / "DATASETS"
+# DATASET_PATH = Path().home() / ".cryovia" / "DATASETS"
 
 def logical_process(pipe, device="GPU"):
     import tensorflow as tf
@@ -966,7 +967,9 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                             current_mask_path = mask_path / (Path(micrograph).stem + "_mask.pickle")
                             if current_mask_path.exists():
                                 if current_mask_path.suffix == ".pickle":
-                                    mask = mask_file.load(current_mask_path).create_mask()
+                                    self = mask_file.load(current_mask_path)
+                                    mask = self.create_mask()
+                                    
                                 else:
                                     mask,_ = load_file(current_mask_path)
 
