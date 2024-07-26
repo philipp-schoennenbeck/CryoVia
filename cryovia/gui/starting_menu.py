@@ -321,8 +321,7 @@ def startGui(njobs, gpus, debug):
         cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
         DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
 
-
-        CRYOVIA_PATH = Path().home() / ".cryovia_debug"
+        os.environ["CRYOVIA_MODE"] = "1"
 
     if gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(i) for i in gpus])

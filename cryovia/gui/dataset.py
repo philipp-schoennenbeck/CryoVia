@@ -41,7 +41,8 @@ DEFAULT_CONFIGS = OrderedDict([
         ("step_size",13),
         ("min_size",50),
         ("only_run_for_new_data",False),
-        ("estimate_middle_plane",True)
+        ("estimate_middle_plane",True),
+        ("dark_mode", True)
    ])),
     ("segmentation",OrderedDict([
         ("rerun_segmentation", False),
@@ -52,6 +53,7 @@ DEFAULT_CONFIGS = OrderedDict([
         ("max_nodes", 30)
 ])),
     ("maskGrid", OrderedDict([
+        ("use_existing_mask", False),
         ("to_size",100),
         ("diameter",12000), 
         ("threshold",0.005), 
@@ -63,8 +65,6 @@ DEFAULT_CONFIGS = OrderedDict([
         ("high_pass",0),
         ("distance", 0),
         ("return_ring_width", 400),
-        ("use_existing_mask", False),
-
         ("crop", 500),
 
     ])),
@@ -246,6 +246,7 @@ class Dataset:
                 self.micrograph_paths.append(path)
         
                 self.segmentation_paths[path] = None
+                
         self.save()
     
     def addSegmentationPaths(self, paths, replace=None):
@@ -289,6 +290,40 @@ class Dataset:
 
         self.save()
 
+
+    def isHealthy(self, stopEvent=None):
+
+        
+        missingFiles = {"micrographs":0, "segmentations":0, "analysers":0, "csv":0}
+
+        filesAreMissing = False
+        for i in self.micrograph_paths:
+            if stopEvent is not None:
+                if stopEvent.is_set():
+                    return True, {}
+            if not os.access(i, os.F_OK):
+            
+                missingFiles["micrographs"] += 1
+                filesAreMissing = True
+        for i in self.segmentation_paths.values():
+            if stopEvent is not None:
+                if stopEvent.is_set():
+                    return True, {}
+            if not os.access(i, os.F_OK):
+                missingFiles["segmentations"] += 1
+                filesAreMissing = True
+        for i in self.analysers.values():
+            if stopEvent is not None:
+                if stopEvent.is_set():
+                    return True, {}
+            if not os.access(i, os.F_OK):
+                missingFiles["analysers"] += 1
+                filesAreMissing = True
+
+        if not (self.pickel_path / "membranes.csv").exists():
+            missingFiles["csv"] += 1
+
+        return not filesAreMissing, missingFiles
 
     @property
     def csv(self):
@@ -725,6 +760,21 @@ class Dataset:
             removeIdx(idx)
         self.save()
     
+
+    def loadMicrographCsv(self, file):
+        df = pd.read_csv(file, header=None, sep=",", index_col=False)
+        if len(df.columns) == 1:
+            self.addMicrographPaths(df[0])
+        else:
+            self.addMicrographPaths(df[0])
+            for i, row in df.iterrows():
+                self.segmentation_paths[row[0]] = row[1]
+                if row[0] in self.analysers:
+                    self.analysers.pop(row[0])
+ 
+        
+
+
 
     def load_data(self, njobs=1, type_="Analyser", rewrite_dir=False, max_=None, use_csv=False):
         """

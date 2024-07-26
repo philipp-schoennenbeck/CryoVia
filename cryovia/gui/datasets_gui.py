@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication, QStyleOptionViewItem, QTableView, QTab
 from PyQt5.QtWidgets import QListView, QTreeView, QItemDelegate, QMainWindow, QToolButton, QDialog, QFrame, QListWidgetItem, QListWidget, QMessageBox, QCheckBox, QGroupBox, QSizePolicy, QShortcut, QStyledItemDelegate, QTreeWidget, QTreeWidgetItem
 from PyQt5.QtWidgets import QMenu, QAction, QDesktopWidget, QToolTip
 from PyQt5.QtCore import QAbstractTableModel, Qt, QSize, QItemSelectionModel, QItemSelection, QTimer, QEvent,QAbstractItemModel
-from PyQt5.QtGui import QPixmap, QColor, QIntValidator, QDoubleValidator, QIcon, QValidator,QKeySequence, QWheelEvent, QMouseEvent
+from PyQt5.QtGui import QPixmap, QColor, QIntValidator, QDoubleValidator, QIcon, QValidator,QKeySequence, QWheelEvent, QMouseEvent, QFont
 from PyQt5 import QtCore, QtGui
 import math
 import qimage2ndarray as q2n
@@ -138,6 +138,55 @@ class AnalyserWorker(QObject):
             # print(e)
             try:
                 self.progress.emit((traceback.format_exc(),2))
+            except:
+                pass
+
+        try:
+            self.finished.emit()
+        except:
+            pass
+
+
+
+class CheckFilesWorker(QObject):
+    finished = pyqtSignal()
+    progress = pyqtSignal(tuple)
+    def __init__(self, in_queue, stopEvent):
+        super().__init__()
+
+        self.in_queue:Queue = in_queue
+        self.stopEvent = stopEvent
+
+    def run(self):
+        try:
+            while True:
+                try:
+                    inp = self.in_queue.get(timeout=5)
+                except:
+                    if self.stopEvent.is_set():
+                        try:
+                            self.finished.emit()
+                        except:
+                            pass
+                        return
+                    continue
+                if isinstance(inp, str) and inp=="STOP":
+                    self.finished.emit()
+                    return
+                dataset = inp
+                try:
+                    # self.progress.emit((dataset.name,0))
+                    h, m = dataset.isHealthy(self.stopEvent)
+                    self.progress.emit(((dataset.name, h, m), 0))
+                except Exception as e:
+                    try:
+                        self.progress.emit((traceback.format_exc(),1))
+                    except:
+                        pass
+        except Exception as e:
+            # print(e)
+            try:
+                self.progress.emit((traceback.format_exc(),1))
             except:
                 pass
 
@@ -774,11 +823,236 @@ class DatasetLabelDelegate(QItemDelegate):
         return editor 
 
 
+
+class DoubleClickLineEdit(QLineEdit):
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setReadOnly(True)
+        self.setFrame(False)
+        self.setStyleSheet("QLineEdit { border: none; }")  # Remove the border
+        self.editingFinished.connect(self.editing_Finished)
+        
+        # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def mousePressEvent(self, event):
+        self.parent().parent().parent().selectedThisDataset(self.parent().dataset.name)
+
+    def mouseDoubleClickEvent(self, event):
+        # self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.setReadOnly(False)
+        self.setFocus()
+        self.selectAll()
+
+
+    def editing_Finished(self , **kwargs):
+        
+        if not self.isModified():
+            # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            return
+        if len(self.text()) == 0:
+            self.setText(self.parent().dataset.name)
+            # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            return
+        try:
+            if running(self.parent().dataset.name):
+                raise ValueError()
+            self.parent().dataset.rename(self.text())
+            self.parent().parent().parent().loadDatasets()
+            self.setModified(True)
+        except FileExistsError as e:
+            self.setText(self.parent().dataset.name)
+            pass
+        except ValueError as e:
+            self.setText(self.parent().dataset.name)
+
+        self.setReadOnly(True)
+        # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+        # self.super().editingFinished(**kwargs)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.setReadOnly(True)
+    
+
+
+
+    def set_selected(self, selected):
+        if selected:
+            self.setStyleSheet("background-color: lightblue;")
+        else:
+            self.setStyleSheet("")
+
+
+# class EditableLabel(QLabel):
+#     def __init__(self, text, parent=None):
+#         super().__init__(text, parent)
+#         self.line_edit = QLineEdit()
+#         self.line_edit.setText(text)
+#         self.line_edit.setVisible(False)
+#         self.line_edit.setFrame(False)
+#         self.line_edit.editingFinished.connect(self.finish_editing)
+#         self.line_edit.setFont(QFont(self.font().family(), self.font().pointSize()))
+
+#     def resizeEvent(self, event):
+#         super().resizeEvent(event)
+#         self.line_edit.setGeometry(self.rect())
+
+#     def mouseDoubleClickEvent(self, event):
+#         self.start_editing()
+
+#     def start_editing(self):
+#         self.line_edit.setText(self.text())
+#         # self.setVisible(False)
+#         self.line_edit.setVisible(True)
+#         self.line_edit.setFocus()
+#         self.line_edit.selectAll()
+#         print(self.isVisible(), self.line_edit.isVisible())
+
+#     def finish_editing(self):
+#         print(self.isVisible(), self.line_edit.isVisible())
+#         self.setText(self.line_edit.text())
+#         self.setVisible(True)
+#         self.line_edit.setVisible(False)
+
+
+# class EditableLabel(QLabel):
+#     def __init__(self, text, parent=None):
+#         super().__init__(text, parent)
+#         self.line_edit = QLineEdit(self)
+#         self.line_edit.setText(text)
+#         self.line_edit.setVisible(False)
+#         self.line_edit.setFrame(False)
+#         self.line_edit.editingFinished.connect(self.finish_editing)
+#         self.line_edit.setFont(QFont(self.font().family(), self.font().pointSize()))
+
+#     def mouseDoubleClickEvent(self, event):
+#         self.start_editing()
+
+#     def start_editing(self):
+#         self.line_edit.setText(self.text())
+#         self.setVisible(False)
+#         self.line_edit.setVisible(True)
+#         self.line_edit.setFocus()
+#         self.line_edit.selectAll()
+#         print(self.isVisible(), self.line_edit.isVisible())
+
+#     def finish_editing(self):
+#         print(self.isVisible(), self.line_edit.isVisible())
+#         self.setText(self.line_edit.text())
+#         self.setVisible(True)
+#         self.line_edit.setVisible(False)
+
+
+
+
+
+
+class DatasetLabelWithIcon(QWidget):
+    def __init__(self, dataset, isHealthy, missingFiles={}):
+        super().__init__()
+        self.dataset = dataset
+        
+        tooltip = self.setColorAndGetTooltip(isHealthy, missingFiles)
+        # Create a horizontal layout    
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(2)
+        # Create a label for the text and add it to the layout
+        self.text_label = DoubleClickLineEdit(str(self.dataset.name))
+        layout.addWidget(self.text_label)
+
+        # Create a label for the pixmap and add it to the layout
+        self.pixmap_label = QLabel()
+        
+        pixmap = QPixmap(12, 12)  # Set the size of the pixmap
+        pixmap.fill(QColor('transparent'))  # Fill it with transparent color
+        
+        # Create a QPainter to draw on the QPixmap
+        painter = QPainter(pixmap)
+        painter.setBrush(QColor(self.color))
+        painter.setPen(QColor(self.color))
+        painter.drawEllipse(0, 0, 12, 12)  # Draw the colored circle
+        painter.end()
+
+        self.pixmap_label.setPixmap(pixmap)
+        self.pixmap_label.setToolTip(tooltip)
+        layout.addWidget(self.pixmap_label, alignment=Qt.AlignRight)
+
+        # Set the layout to the custom widget
+        self.setLayout(layout)
+
+
+    
+    def setColorAndGetTooltip(self, isHealthy, missingFiles):
+
+        "micrographs", "segmentations", "analysers"
+        if isHealthy is None:
+            self.color = "yellow"
+            tooltip = "Checking if all files exist."
+        else:
+            if isHealthy:
+                self.color = "green"
+                tooltip = "All files still exist. You can run analysis on this dataset."
+            else:
+                self.color = "red"
+                
+                tooltip = "Files are missing."
+                if missingFiles["micrographs"] > 0:
+                    mf = missingFiles["micrographs"]
+                    tooltip += f"\n{mf} micrographs are missing. You can not run this dataset anymore. "
+                if missingFiles["segmentations"] > 0:
+                    mf = missingFiles["segmentations"]
+                    tooltip += f"\n{mf} segmentations are missing."
+                    if missingFiles["micrographs"] > 0:
+                        pass
+                    else:
+                        tooltip += "You can run the analysis if you rerun segmentation."
+                if missingFiles["analysers"] > 0:
+                    mf = missingFiles["analysers"]
+                    tooltip += f"\n{mf} internal files are missing. These will be recreated if you run the analysis."
+                if missingFiles["csv"] == 0:
+                    tooltip += "\nYou can still look at the result output."
+            
+        return tooltip
+    
+
+    def redraw(self, isHealthy, missingFiles):
+        tooltip = self.setColorAndGetTooltip(isHealthy, missingFiles)
+
+        pixmap = QPixmap(12, 12)  # Set the size of the pixmap
+        pixmap.fill(QColor('transparent'))  # Fill it with transparent color
+        
+        # Create a QPainter to draw on the QPixmap
+        painter = QPainter(pixmap)
+        painter.setBrush(QColor(self.color))
+        painter.setPen(QColor(self.color))
+        painter.drawEllipse(0, 0, 12, 12)  # Draw the colored circle
+        painter.end()
+
+        self.pixmap_label.setPixmap(pixmap)
+        self.pixmap_label.setToolTip(tooltip)
+
+    # def mouseDoubleClickEvent(self, event):
+    #     self.text_label.startEditing()
+
+    def set_selected(self, selected):
+        if selected:
+            self.setStyleSheet("background-color: lightblue;")
+        else:
+            self.setStyleSheet("")
+
+    def __repr__(self):
+        return self.dataset.name
+
+
 class DatasetLabel(QListWidgetItem):
     def __init__(self,dataset, **kwargs) -> None:
         super().__init__(**kwargs)
         self.dataset = dataset
+        
         self.setText(str(self.dataset.name))
+        
         # self.classifier.changed_hooks.append(self.reset_name)
         self.setFlags(self.flags() | Qt.ItemFlag.ItemIsEditable)
         
@@ -796,32 +1070,143 @@ class DatasetLabel(QListWidgetItem):
 #         self.setReadOnly(True)
         
 
+# class CircleIconWidget(QLabel):
+#     def __init__(self, color="green"):
+#         super().__init__()
+#         self.color = color
+#         self.initUI()
 
+#     def initUI(self):
+#         # Create a QPixmap to draw the green circle
+#         pixmap = QPixmap(12, 12)  # Set the size of the pixmap
+#         pixmap.fill(QColor('transparent'))  # Fill it with transparent color
+        
+#         # Create a QPainter to draw on the QPixmap
+#         painter = QPainter(pixmap)
+#         painter.setBrush(QColor(self.color))
+#         painter.setPen(QColor(self.color))
+#         painter.drawEllipse(0, 0, 12, 12)  # Draw the colored circle
+#         painter.end()
+
+#         self.setPixmap(pixmap)
+
+#         self.setToolTip('Green Circle Icon')
+        
 class DatasetListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setItemDelegate(DatasetLabelDelegate(self))
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.loadDatasets()
-        self.itemSelectionChanged.connect(self.showInfo)
-        self.itemDoubleClicked.connect(self.lookUpItem)
+        self.healthCheck = {}
+        self.datasets = {}
+        self.datasetsWidgets = {}
+        self.startWorker()
 
+        self.loadDatasets()
+        self.itemSelectionChanged.connect(self.on_selection_changed)
+        self.itemSelectionChanged.connect(self.showInfo)
+        
+        # self.itemDoubleClicked.connect(self.lookUpItem)
+
+
+
+    def selectedThisDataset(self, dataset):
+        self.setCurrentItem(self.datasetsWidgets[dataset])
     
     def lookUpItem(self, item):
-        self.mainWindow().datasetTabWidget.addDatasetTab(item.dataset)
+        self.mainWindow().datasetTabWidget.addDatasetTab(self.itemWidget(item).dataset)
 
 
     def loadDatasets(self):
         self.clear()
+        self.datasets = {}
+        self.datasetsWidgets = {}
         datasets = get_all_dataset_paths()
         datasets = [Dataset.load(dataset) for dataset in datasets]
         for dataset in datasets:
-            label = DatasetLabel(dataset, parent=self)
-            # try:
-            #     dataset.to_csv()
-            # except:
-            #     pass
-            self.addItem(label)
+            dummy = QListWidgetItem(self)
+            health = None
+            missingFiles = {}
+            if dataset.name in self.healthCheck:
+                health, missingFiles = self.healthCheck[dataset.name]
+            label = DatasetLabelWithIcon(dataset, health, missingFiles)
+            dummy.setSizeHint(label.sizeHint())
+            self.setItemWidget(dummy, label)
+            self.datasets[dataset.name] = label
+            self.datasetsWidgets[dataset.name] = dummy
+            self.queue.put(dataset)
+        datasets_to_del = []
+        for key, value in self.healthCheck.items():
+            if key not in self.datasets:
+                datasets_to_del.append(key)
+        for key in datasets_to_del:
+            del self.healthCheck[key]
+
+    def startWorker(self):
+        thread = QThread()
+        queue = Queue()
+        stopEvent = mp.get_context("spawn").Event()
+        worker = CheckFilesWorker(queue, stopEvent)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self.finishedRunning)
+        worker.progress.connect(self.progressEmited)
+        
+        thread.start()   
+        self.currentThread = thread
+        self.worker = worker
+        self.queue = queue
+        self.stopEvent = stopEvent
+
+    def performHealthCheck(self, dataset):
+        if dataset in self.datasets:
+            return
+        self.queue.put(dataset)
+    
+    def stopThread(self, keep_running=False):
+        global MESSAGE
+        if self.currentThread is not None:
+            if keep_running:
+                self.queue.put("STOP")
+            else:
+
+                self.stopEvent.set()
+                MESSAGE("Waiting until analysis is done or thread is closed.")
+            
+            # while self.currentThread.isRunning():
+            #     time.sleep(0.5)
+
+
+    def finishedRunning(self):
+        pass
+
+    def progressEmited(self, emit):
+        global CURRENTLY_RUNNING, MESSAGE
+        result, state = emit
+        if state == 0:
+            dataset, isHealthy, missingFiles = result
+            if dataset in self.datasets:
+                self.datasets[dataset].redraw(isHealthy, missingFiles)
+            
+
+        elif state == 1:
+            
+            MESSAGE(result)
+        elif state == 3:
+            MESSAGE(result)
+
+
+    def on_selection_changed(self):
+        for i in range(self.count()):
+            item = self.item(i)
+            custom_widget = self.itemWidget(item)
+            if custom_widget:
+                custom_widget.text_label.set_selected(item.isSelected())
+                custom_widget.set_selected(item.isSelected())
+
 
     def mainWindow(self):
         return self.parent().parent().parent().parent().parent().parent()
@@ -833,6 +1218,8 @@ class DatasetListWidget(QListWidget):
             infowidget.resetInfos()
             return
         for item in selection:
+            item = self.itemWidget(item)
+            
             dataset = item.dataset
             infowidget.loadDatasetInfo(dataset)
 
@@ -846,22 +1233,35 @@ class DatasetInfoWidget(QWidget):
     
     def initUI(self):
 
-        self.numberOfMicrographsLabel = QLabel("# Micrographs")
+
+        self.numberOfMicrographsLabelLabelLayout = QVBoxLayout()
+        self.numberOfMicrographsLabel = QLabel("# Micrographs\n ")
+        self.numberOfMicrographsLabelLabelLayout.addWidget(self.numberOfMicrographsLabel)
 
 
-        self.numberOfMicrographsLabelAddButton = QPushButton("+")
+        self.numberOfMicrographsLabelAddButton = QPushButton("Add micrographs")
         self.numberOfMicrographsLabelAddButton.setToolTip("Add micrographs to the dataset")
         self.numberOfMicrographsLabelAddButton.clicked.connect(self.addMicrographs)
-        self.numberOfMicrographsLabelRemoveButton = QPushButton()
-        self.numberOfMicrographsLabelRemoveButton.setToolTip("Remove all micrographs from the dataset")
-        self.numberOfMicrographsLabelRemoveButton.setIcon(self.numberOfMicrographsLabelRemoveButton.style().standardIcon(QStyle.SP_DialogDiscardButton))
-        self.numberOfMicrographsLabelRemoveButton.clicked.connect(self.removeMicrographs)
-        self.numberOfMicrographsLabelLabel = QLabel("")
 
+        self.numberOfMicrographsLabelLoadCsvButton = QPushButton("Load in CSV")
+        self.numberOfMicrographsLabelLoadCsvButton.setToolTip("Load in a csv file with micrograph paths in first column and optional segmentation paths in second. It should have no header.")
+        self.numberOfMicrographsLabelLoadCsvButton.clicked.connect(self.loadCsv)
+
+        self.numberOfMicrographsLabelRemoveButton = QPushButton("Remove all micrographs")
+        self.numberOfMicrographsLabelRemoveButton.setToolTip("Remove all micrographs from the dataset")
+        # self.numberOfMicrographsLabelRemoveButton.setIcon(self.numberOfMicrographsLabelRemoveButton.style().standardIcon(QStyle.SP_DialogDiscardButton))
+        self.numberOfMicrographsLabelRemoveButton.clicked.connect(self.removeMicrographs)
+        # self.numberOfMicrographsLabelLabel = QLabel("")
+        # self.numberOfMicrographsLabelLabelLayout.addWidget(self.numberOfMicrographsLabelLabel, Qt.AlignCenter)
+
+        # self.numberOfMicrographsOnlyLabelLayout = QHboxLayout()
         self.numberOfMicrographsLabelLayout = QHBoxLayout()
-        self.numberOfMicrographsLabelLayout.addWidget(self.numberOfMicrographsLabelLabel)
-        self.numberOfMicrographsLabelLayout.addWidget(self.numberOfMicrographsLabelAddButton)
-        self.numberOfMicrographsLabelLayout.addWidget(self.numberOfMicrographsLabelRemoveButton)
+        self.numberOfMicrographsChangeLayout= QVBoxLayout()
+        # self.numberOfMicrographsLabelLayout.addWidget(self.numberOfMicrographsLabelLabel)
+        self.numberOfMicrographsLabelLayout.addLayout(self.numberOfMicrographsChangeLayout)
+        self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelAddButton)
+        self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelLoadCsvButton)
+        self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelRemoveButton)
 
 
         
@@ -879,7 +1279,8 @@ class DatasetInfoWidget(QWidget):
 
 
         self.layout().addWidget(self.placeholder,0,0)#
-        self.layout().addWidget(self.numberOfMicrographsLabel, 1,0)
+        self.layout().addLayout(self.numberOfMicrographsLabelLabelLayout, 1,0)
+        # self.layout().addWidget(self.numberOfMicrographsLabelLabel, 2,0)
 
         self.layout().addLayout(self.numberOfMicrographsLabelLayout,1 ,1 )
         self.timesLabels = {}
@@ -923,7 +1324,8 @@ class DatasetInfoWidget(QWidget):
 
     def loadDatasetInfo(self, dataset):
 
-        self.numberOfMicrographsLabelLabel.setText(str(len(dataset)))
+        self.numberOfMicrographsLabel.setText(f"# Micrographs\n    {len(dataset)}")
+        # self.numberOfMicrographsLabelLabel.setText(str(len(dataset)))
         for key, value in dataset.times.items():
             self.timesLabels[key].setText(f"{key}: {value}")
         if running(dataset.name):
@@ -939,8 +1341,8 @@ class DatasetInfoWidget(QWidget):
 
     
     def resetInfos(self):
-
-        self.numberOfMicrographsLabelLabel.setText("")
+        self.numberOfMicrographsLabel.setText("# Micrographs\n ")
+        # self.numberOfMicrographsLabelLabel.setText("")
         self.currentlyRunning.setText("")
         self.isZippedLabel.setText("")
         for key, value in self.timesLabels.items():
@@ -955,6 +1357,49 @@ class DatasetInfoWidget(QWidget):
 
     def mainWindow(self):
         return self.parent().parent().parent().parent()
+
+    def loadCsv(self):
+        selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
+        if len(selection) != 1:
+            return
+        dataset = selection[0].dataset
+        dlg = QFileDialog()
+
+        file_suffixes = " *.csv"
+        file_suffixes = f"CSV-File (*{file_suffixes})"
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        file, filt = dlg.getOpenFileName(self, "Choose csv file", ".",filter=file_suffixes)
+        if len(file) == 0 or file is None:
+            return
+        dataset.loadMicrographCsv(file)
+
+        nonMrcFiles = [file for file in dataset.micrograph_paths if Path(file).suffix != ".mrc" and file not in dataset.pixelSizes]
+        if len(nonMrcFiles) > 0:
+            pixelSizeWidget = NonMrcFilesPixelSizeWidget(self, len(nonMrcFiles))
+            result = pixelSizeWidget.exec()
+            if result == 0:
+                ps = 1
+            ps = pixelSizeWidget.getPixelSize()
+            
+        for file in nonMrcFiles:
+            dataset.pixelSizes[file] = ps 
+
+        dataset.save()
+        self.loadDatasetInfo(dataset)
+        
+        # nonMrcFiles = [file for file in files if Path(file).suffix != ".mrc" and file not in dataset.pixelSizes]
+        # if len(nonMrcFiles) > 0:
+        #     pixelSizeWidget = NonMrcFilesPixelSizeWidget(self, len(nonMrcFiles))
+        #     result = pixelSizeWidget.exec()
+        #     if result == 0:
+        #         return
+        #     ps = pixelSizeWidget.getPixelSize()
+            
+        # dataset.addMicrographPaths(files)
+        # for file in nonMrcFiles:
+        #     dataset.pixelSizes[file] = ps 
+        # dataset.save()
+        # self.loadDatasetInfo(dataset)
 
     def removeMicrographs(self):
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
@@ -1056,7 +1501,7 @@ class DatasetButtonWidget(QWidget):
         items = listwidget.selectedItems()
         if len(items) == 1:
             
-            dataset = items[0].dataset
+            dataset =  listwidget.itemWidget(items[0]).dataset
             save_dir = dataset.dataset_path.parent
             if dataset.isZipped:
                 MESSAGE(f"Cannot copy dataset {dataset.name} because it is still zipped.")
@@ -1089,7 +1534,7 @@ class DatasetButtonWidget(QWidget):
         listwidget : DatasetListWidget= self.parent().listWidget
         items = listwidget.selectedItems()
         if len(items) == 1:
-            dataset = items[0].dataset
+            dataset = listwidget.itemWidget(items[0]).dataset
             if running(dataset.name):
                 global MESSAGE
 
@@ -1116,7 +1561,7 @@ class DatasetButtonWidget(QWidget):
             do_for_all = False
             do_for_all_ret = None
             for counter, item in enumerate(items):
-                dataset = item.dataset
+                dataset = listwidget.itemWidget(item).dataset
                 if do_for_all:
                     ret = do_for_all_ret
                 else:
@@ -1147,7 +1592,7 @@ class DatasetButtonWidget(QWidget):
         listwidget : DatasetListWidget= self.parent().listWidget
         items = listwidget.selectedItems()
         for item in items:
-            dataset = item.dataset
+            dataset = listwidget.itemWidget(item).dataset
             self.mainWindow().datasetTabWidget.addDatasetTab(dataset)
         self.mainWindow().graphWidget.membraneGraphs.redrawData()
 
@@ -1358,7 +1803,7 @@ class ConfigWidget(QDialog):
         # self.sections = []
         self.createAllButtons()
         self.createAllParameters()
-        self.setGeometry(new_x,new_y,300,400)
+        self.setGeometry(new_x,new_y,500,500)
 
 
         self.checkBox = QCheckBox("Apply configs to all")
@@ -1390,6 +1835,8 @@ class ConfigWidget(QDialog):
             for key, lineedit in value_dict.items():
                 if isinstance(lineedit, QComboBox):
                     config[func][key] = lineedit.currentText()
+                elif isinstance(lineedit, QCheckBox):
+                    config[func][key] = lineedit.isChecked()
                 else:
                     config[func][key] = lineedit.value()
         return config
@@ -1414,7 +1861,10 @@ class ConfigWidget(QDialog):
                     lineedit.setCurrentText("Default")
                 elif "Default_NN" in items:
                     lineedit.setCurrentText("Default_NN")
-                    
+            elif isinstance(DEFAULT_CONFIGS[func][name], bool):
+                lineedit = QCheckBox()
+                # b = DEFAULT_CONFIGS[func][name]
+                lineedit.setChecked(self.previous_configs[func][name])
             else:
                 lineedit = QLabelWithValidator(str(self.previous_configs[func][name]), type(DEFAULT_CONFIGS[func][name]), self.previous_configs[func][name])
             label = QLabel(shown_name)
@@ -1442,6 +1892,7 @@ class ConfigWidget(QDialog):
         addParameter("Segmentation model", "segmentation_model", "segmentation")
         addParameter("Shape classifier", "shape_classifier", "shapePrediction")
         addParameter("Only run for new data", "only_run_for_new_data", "general")
+        addParameter("Membranes are dark", "dark_mode", "general")
         addParameter("Estimate middle plane", "estimate_middle_plane", "general")
         addParameter("Resize to [Å]","to_size","maskGrid")
         addParameter("Grid diameter [Å]","diameter","maskGrid")
@@ -1660,9 +2111,7 @@ class runButtonWidget(QPushButton):
             MESSAGE(dataset)
 
         self.mainWindow().datasetListWidget.listWidget.showInfo()
-            # for config, item in zip(configs, selection):
-            #     dataset:Dataset = item.dataset
-            #     dataset.run(**njobs_threads_dict, run_kwargs=config)
+
 
 
 class MplCanvas(FigureCanvasQTAgg):
@@ -2298,7 +2747,6 @@ class MicrographData:
 
     def clicked(self, coordinate, shape, pad):
         if self.click_seg is None:
-            print(f"click_seg is None")
             return 0, False
     
         clicked_pos = np.array([int(coordinate.y()), int(coordinate.x())])
@@ -3322,6 +3770,7 @@ class DatasetGui(QWidget):
         self.rowTwoColumnOne = QWidget()
         self.rowTwoColumnOne.setLayout(QVBoxLayout())
         self.rowTwoColumnOne.layout().addWidget(self.runButtonWidget)
+
         self.rowTwoColumnOne.layout().addWidget(self.datasetListWidgetGroupBox)
         self.rowTwo.addWidget(self.rowTwoColumnOne)
 
@@ -3406,10 +3855,13 @@ class DatasetGui(QWidget):
                 return
             if ret == 1:
                 self.runButtonWidget.stopThread()
+                self.datasetListWidget.listWidget.stopThread()
             elif ret == 0:
                 self.runButtonWidget.stopThread(keep_running=True)
+                self.datasetListWidget.listWidget.stopThread()
         else:
             self.runButtonWidget.stopThread()
+            self.datasetListWidget.listWidget.stopThread()
 
         if self.customParent is not None:
             self.customParent.child_closed()
@@ -3433,3 +3885,123 @@ if __name__ == "__main__":
     
     view.show()
     sys.exit(app.exec_())
+
+
+
+
+
+
+
+
+
+# class EditableLineEdit(QLineEdit):
+#     def __init__(self, text, parent=None):
+#         super().__init__(text, parent)
+#         self.setReadOnly(True)
+#         self.setFrame(False)
+#         self.setStyleSheet("QLineEdit { border: none; }")  # Remove the border
+#         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Make the line edit transparent to mouse events initially
+
+#     def mouseDoubleClickEvent(self, event):
+#         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)  # Allow the line edit to receive mouse events
+#         self.setReadOnly(False)
+#         self.setFocus()
+#         self.selectAll()
+
+#     def focusOutEvent(self, event):
+#         super().focusOutEvent(event)
+#         self.setReadOnly(True)
+#         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Make it transparent to mouse events again
+
+# class CustomListItem(QWidget):
+#     def __init__(self, text, pixmap):
+#         super().__init__()
+
+#         # Create a horizontal layout with no margins and spacing
+#         layout = QHBoxLayout()
+#         layout.setContentsMargins(0, 0, 0, 0)
+#         layout.setSpacing(5)  # Set spacing between widgets
+
+#         # Create an editable line edit for the text and add it to the layout
+#         self.editable_line_edit = EditableLineEdit(text)
+#         layout.addWidget(self.editable_line_edit)
+
+#         # Create a label for the pixmap and add it to the layout
+#         pixmap_label = QLabel()
+#         pixmap_label.setPixmap(pixmap)
+#         layout.addWidget(pixmap_label)
+
+#         # Add stretch to push the pixmap to the right side
+#         layout.addStretch()
+
+#         # Set the layout to the custom widget
+#         self.setLayout(layout)
+
+#         # Optionally, set a fixed height to make it more compact
+#         self.setFixedHeight(30)
+
+#     def get_text(self):
+#         return self.editable_line_edit.text()
+
+#     def set_selected(self, selected):
+#         if selected:
+#             self.setStyleSheet("background-color: lightblue;")
+#         else:
+#             self.setStyleSheet("")
+
+# class Example(QWidget):
+#     item_selection_changed = pyqtSignal()
+
+#     def __init__(self):
+#         super().__init__()
+#         self.initUI()
+
+#     def initUI(self):
+#         # Create a QListWidget
+#         self.list_widget = QListWidget()
+
+#         # Connect the selection change signal
+#         self.list_widget.itemSelectionChanged.connect(self.on_selection_changed)
+
+#         # Create a QPixmap
+#         pixmap = QPixmap(16, 16)
+#         pixmap.fill(QColor('green'))
+
+#         # Create a custom list item with text and pixmap
+#         custom_item = CustomListItem("Sample Text", pixmap)
+
+#         # Create a QListWidgetItem
+#         list_item = QListWidgetItem(self.list_widget)
+
+#         # Set the size hint of the list item to match the custom widget
+#         list_item.setSizeHint(custom_item.sizeHint())
+
+#         # Add the custom widget to the QListWidget
+#         self.list_widget.setItemWidget(list_item, custom_item)
+
+#         # Button to get selected items
+#         button = QPushButton("Get Selected Items")
+#         button.clicked.connect(self.get_selected_items)
+
+#         # Create a vertical layout and add the list widget to it
+#         layout = QVBoxLayout()
+#         layout.addWidget(self.list_widget)
+#         layout.addWidget(button)
+#         self.setLayout(layout)
+
+#         self.setWindowTitle('Custom List Widget Item')
+#         self.show()
+
+#     def get_selected_items(self):
+#         selected_items = self.list_widget.selectedItems()
+#         for item in selected_items:
+#             custom_widget = self.list_widget.itemWidget(item)
+#             if custom_widget:
+#                 print(f"Selected item text: {custom_widget.get_text()}")
+
+#     def on_selection_changed(self):
+#         for i in range(self.list_widget.count()):
+#             item = self.list_widget.item(i)
+#             custom_widget = self.list_widget.itemWidget(item)
+#             if custom_widget:
+#                 custom_widget.set_selected(item.isSelected())

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any
+import os
 
 
 
@@ -30,3 +31,6 @@ CLASSIFIER_PATH = PathContainer(Path().home() / ".cryovia" / "Classifiers")
 SHAPE_CURVATURE_PATH = PathContainer(Path().home() / ".cryovia" / "Shape_curvatures")
 cryovia_TEMP_DIR = PathContainer(Path().home() / ".cryovia" / "temp")
 DATASET_PATH = PathContainer(Path().home() / ".cryovia" / "DATASETS")
+
+
+os.environ["CRYOVIA_MODE"] = "0"

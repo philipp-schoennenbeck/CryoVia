@@ -846,8 +846,8 @@ class TrainWidget(QWidget):
 
         self.predictInstanceCheckbox = QCheckBox("Identify instances")
         self.predictInstanceCheckbox.setToolTip("Whether to try identifying instances. This is useful in very crowded micrographs with overlapping membranes.")
-        self.predictGridRemoverCheckbox = QCheckBox("Mask visible grids")
-        self.predictGridRemoverCheckbox.setToolTip("Whether to try to predict where the metal grid is and remove segmentations on the grid.")
+        # self.predictGridRemoverCheckbox = QCheckBox("Mask visible grids")
+        # self.predictGridRemoverCheckbox.setToolTip("Whether to try to predict where the metal grid is and remove segmentations on the grid.")
         self.predictInstanceCheckbox.clicked.connect(self.changeAvailableSuffixes)
         self.predictSaveIntermediateFilesCheckbox = QCheckBox("Save intermediate files")
 
@@ -860,8 +860,8 @@ class TrainWidget(QWidget):
 
 
         self.predictImagesCheckboxLayout.addWidget(self.predictInstanceCheckbox,0,0)
-        self.predictImagesCheckboxLayout.addWidget(self.predictGridRemoverCheckbox,0,1)
-        self.predictImagesCheckboxLayout.addWidget(self.predictSaveIntermediateFilesCheckbox,1,0)
+        # self.predictImagesCheckboxLayout.addWidget(self.predictGridRemoverCheckbox,0,1)
+        self.predictImagesCheckboxLayout.addWidget(self.predictSaveIntermediateFilesCheckbox,0,1)
         self.predictTabs = QTabWidget()
 
         self.predictGroupBox.layout().addWidget(self.predictTabs)
@@ -871,12 +871,12 @@ class TrainWidget(QWidget):
         self.predictLayout.addLayout(self.predictImagesLayout)
         self.predictLayout.addLayout(self.predictImagesCheckboxLayout)
 
-        self.gridremoverParameterTab = GridRemoverParameterWidget(self)
-        self.instanceIdentificationParameterTab = InstanceIdentificationParameterWidget(self)
+        # self.gridremoverParameterTab = GridRemoverParameterWidget(self)
+        # self.instanceIdentificationParameterTab = InstanceIdentificationParameterWidget(self)
 
         self.predictTabs.addTab(self.predictWidget, "Predict")
-        self.predictTabs.addTab(self.gridremoverParameterTab, "Grid remover")
-        self.predictTabs.addTab(self.instanceIdentificationParameterTab, "Instance identification")
+        # self.predictTabs.addTab(self.gridremoverParameterTab, "Grid remover")
+        # self.predictTabs.addTab(self.instanceIdentificationParameterTab, "Instance identification")
 
         self.workers = {}
         self.threads = {}
@@ -888,7 +888,7 @@ class TrainWidget(QWidget):
         self.filesLayout.addWidget(self.clearTrainingDataButton)
         self.filesLayout.addWidget(self.openNapariButton)
         self.trainingLayout.addLayout(self.filesLayout)
-        self.trainingLayout.addLayout(self.testLayout)#
+        # self.trainingLayout.addLayout(self.testLayout)#
         self.trainingLayout.addWidget(self.trainButton)
         self.layout().addWidget(self.trainingGroupBox)
         self.layout().addWidget(self.activeLearningGroupBox)
@@ -995,9 +995,18 @@ class TrainWidget(QWidget):
                 for file in nonMrcFiles:
                     pixelSizes[file] = ps 
 
+            # apply_grid_remover = self.predictGridRemoverCheckbox.isChecked()
+            # apply_grid_remover = False
+            # predicting_dict = {
+            #     "grid_remover":{"apply": apply_grid_remover, "params":self.gridremoverParameterTab.getParams()},
+            #     "instance_identification":{"apply":self.predictInstanceCheckbox.isChecked(), "params":self.instanceIdentificationParameterTab.getParams()},
+            #     "suffix":self.predictSuffixCombobox.currentText(),
+            #     "save_intermediate_files":self.predictSaveIntermediateFilesCheckbox.isChecked()
+            #     }
+            
             predicting_dict = {
-                "grid_remover":{"apply":self.predictGridRemoverCheckbox.isChecked(), "params":self.gridremoverParameterTab.getParams()},
-                "instance_identification":{"apply":self.predictInstanceCheckbox.isChecked(), "params":self.instanceIdentificationParameterTab.getParams()},
+                "grid_remover":{"apply": False, "params":None},
+                "instance_identification":{"apply":self.predictInstanceCheckbox.isChecked(), "params":None},
                 "suffix":self.predictSuffixCombobox.currentText(),
                 "save_intermediate_files":self.predictSaveIntermediateFilesCheckbox.isChecked()
                 }

@@ -383,9 +383,7 @@ def find_skeleton(label_image, shape, conv_data_disk, func, kwargs, ps,get_conv_
     conv_vesicle -= np.min(conv_vesicle)
     conv_vesicle /= np.max(conv_vesicle)
 
-    
     ridge_map = func(conv_vesicle, **kwargs)
-
 
     ridge_map[label_vesicle == 0] = np.min(ridge_map)
 
@@ -598,7 +596,7 @@ def ridge_detection(label_volume, image,  njobs=1, pixel_size=1, min_size=8, max
     conv_data_disk = convolve(data, disk_kernel, mode="nearest")
     out_skeleton = np.zeros(label_volume.shape,dtype=np.uint8)
     kwargs = {'sigmas': np.arange(1,2), 'mode': 'reflect'}
-    func = frangi
+    func =  frangi
     name = str(name)
     if pool is None:
 
