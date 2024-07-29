@@ -309,6 +309,8 @@ class Dataset:
             if stopEvent is not None:
                 if stopEvent.is_set():
                     return True, {}
+            if i is None:
+                continue
             if not os.access(i, os.F_OK):
                 missingFiles["segmentations"] += 1
                 filesAreMissing = True

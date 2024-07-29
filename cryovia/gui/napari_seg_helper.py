@@ -13,8 +13,9 @@ from magicgui import magic_factory
 from scipy.ndimage import label
 
 # from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
-from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QLineEdit, QFileDialog, QCheckBox, QLabel, QGridLayout, QMessageBox, QShortcut, QDialog,QDialogButtonBox
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QLineEdit, QFileDialog, QCheckBox, QLabel, QGridLayout, QMessageBox, QShortcut, QDialog,QDialogButtonBox, QScrollArea, QSizePolicy 
 from PyQt5.QtGui import QDoubleValidator
+
 import mrcfile
 import numpy as np
 from napari import Viewer
@@ -88,6 +89,55 @@ class DefaultFloatValidator(QDoubleValidator):
         return super().fixup(a0)
 
 
+
+
+class ExpandableLabel(QWidget):
+    def __init__(self, text):
+        super().__init__()
+
+        # Create the main layout
+        self.layout = QVBoxLayout()
+
+        # Create the button to toggle the label
+        self.toggle_button = QPushButton('Show More')
+        self.toggle_button.clicked.connect(self.toggle_text)
+        self.layout.addWidget(self.toggle_button)
+
+        # Create the scroll area to contain the label
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Create the label with the large amount of text
+        self.label = QLabel(text)
+        self.label.setWordWrap(True)
+
+        # Add the label to the scroll area
+        self.scroll_area.setWidget(self.label)
+        self.layout.addWidget(self.scroll_area)
+
+        # Set initial state to collapsed
+        self.label.setVisible(False)
+        self.scroll_area.setVisible(False)
+
+        # Set the layout for the widget
+        self.setLayout(self.layout)
+
+    def toggle_text(self):
+        if self.label.isVisible():
+            self.label.setVisible(False)
+            self.scroll_area.setVisible(False)
+            self.toggle_button.setText('Show More')
+        else:
+            self.label.setVisible(True)
+            self.scroll_area.setVisible(True)
+            self.toggle_button.setText('Show Less')
+
+
+
+
+
+
 class SegmentationHelper(QWidget):
     def __init__(self, viewer:Viewer, savedir=Path().cwd(), files=[], custom_parent=None, segmentation_model=None, default_pixel_size=7):
         super().__init__()
@@ -111,6 +161,21 @@ class SegmentationHelper(QWidget):
         self.finishedSegmentations = [[],[]]
 
         self.setLayout(QVBoxLayout())
+
+        long_text = (
+            "This napari window should only be used to create segmentations for CryoVia.\n"
+            "Usage:\n"
+            "Load/add files: Load in micrograph files to manually segment.\n"
+            "Choose save directory: Choose a directory, in which the segmentations will be saved. By default this will be the current working directory\n"
+            "Previous/next membrane: Go to the previous/next membrane to segment. Add another slice to the segmnetation if you are at the last slice.\n" 
+            "Previous/next file: Open the previous/next file and create a new segmentation stack (or open an already existing one). The segmentation will automatically be saved.\n"
+            "Apply low/high pass filter: Applies a gaussian low/high pass filter with the given threshold to the current image.\n"
+            ""
+        )
+
+        self.explainationLabel = ExpandableLabel(long_text)
+        self.layout().addWidget(self.explainationLabel)
+
 
         self.loadFilesButton = QPushButton("Load/Add files")
         self.loadFilesButton.clicked.connect(self.loadFiles)
@@ -162,14 +227,14 @@ class SegmentationHelper(QWidget):
 
 
         self.applyLowPassFilterButton = QPushButton("Apply low pass filter")
-        self.applyLowPassFilterLineEdit  = QLineEdit("0.1")
-        self.applyLowPassFilterLineEdit.setValidator(QDoubleValidator(top=1.0))
+        self.applyLowPassFilterLineEdit  = QLineEdit("500")
+        self.applyLowPassFilterLineEdit.setValidator(QDoubleValidator())
 
-        self.applyLowPassFilterButton.clicked.connect(self.applyLowPassFilter)
+        self.applyLowPassFilterButton.clicked.connect(self.applyLowPassFilterAlt)
 
         self.applyLowPassFilterLayout = QHBoxLayout()
         self.applyLowPassFilterLayout.addWidget(self.applyLowPassFilterButton)
-        self.applyLowPassFilterLayout.addWidget(self.applyLowPassFilterLineEdit)
+        self.applyHighPassFilterLayout.addWidget(self.applyLowPassFilterLineEdit)
 
 
         self.applyHighPassFilterButton = QPushButton("Apply high pass filter")
@@ -177,9 +242,11 @@ class SegmentationHelper(QWidget):
         # self.applyHighPassFilterLineEdit.setValidator(QDoubleValidator(top=1.0))
 
         self.applyHighPassFilterButton.clicked.connect(self.applyHighPassFilter)
+        self.FilterThresholdLabel = QLabel("Filter threshold")
 
         self.applyHighPassFilterLayout = QHBoxLayout()
-        self.applyHighPassFilterLayout.addWidget(self.applyHighPassFilterButton)
+        self.applyHighPassFilterLayout.addWidget(self.FilterThresholdLabel)
+        self.applyLowPassFilterLayout.addWidget(self.applyHighPassFilterButton)
         # self.applyHighPassFilterLayout.addWidget(self.applyHighPassFilterLineEdit)
 
 
@@ -437,6 +504,7 @@ class SegmentationHelper(QWidget):
             freq_y = np.fft.fftfreq(image.shape[0], 1)
             freq_meshgrid = np.meshgrid(freq_x, freq_y)
             frequencies = np.sqrt(freq_meshgrid[0]**2 + freq_meshgrid[1]**2)
+            print(np.min(frequencies), np.max(frequencies))
 
             
             # Apply the low-pass filter in the Fourier domain
@@ -472,6 +540,59 @@ class SegmentationHelper(QWidget):
         layer.data = low_passed
 
     
+
+    def applyLowPassFilterAlt(self):
+        """
+        Applies high pass filter of the current file.
+        Parameters
+        ----------
+
+
+        Returns
+        -------
+        
+        """
+        def gauss(fx,fy,sig):
+
+            r = np.fft.fftshift(np.sqrt(fx**2 + fy**2))
+            
+            return np.exp(-2*np.pi**2*(r*sig)**2)
+
+        def gaussian_filter(im,sig,apix):
+            '''
+                sig (real space) and apix in angstrom
+            '''
+            sig = sig/2/np.pi
+            fx,fy = np.meshgrid(np.fft.fftfreq(im.shape[1],apix),\
+                                np.fft.fftfreq(im.shape[0],apix))
+
+            im_fft = np.fft.fftshift(np.fft.fft2(im))
+            fil = gauss(fx,fy,sig*apix)            
+            im_fft_filtered = im_fft*fil
+            newim = np.real(np.fft.ifft2(np.fft.ifftshift(im_fft_filtered)))
+            
+            return newim
+        
+        name = self.getName()
+        if name is None:
+            return
+        try:
+            layer = self.viewer.layers[name]
+        except Exception as e:
+            print(e)
+            return
+        
+
+        img = layer.data
+        sig = int(float(self.applyLowPassFilterLineEdit.text()) / self.pixelSize)
+
+        sig += (sig + 1) % 2
+        low_passed = gaussian_filter(img,sig,self.pixelSize)
+        
+
+        layer.data = low_passed
+
+
 
     def applyHighPassFilter(self):
         """
@@ -517,7 +638,7 @@ class SegmentationHelper(QWidget):
         
 
         img = layer.data
-        sig = int(1500 / self.pixelSize)
+        sig = int(float(self.applyLowPassFilterLineEdit.text()) / self.pixelSize)
         sig += (sig + 1) % 2
         high_passed = gaussian_filter(img,0,self.pixelSize) - gaussian_filter(img,sig,self.pixelSize)
         layer.data = high_passed

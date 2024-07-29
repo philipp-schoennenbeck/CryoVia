@@ -12,6 +12,9 @@ from traceback import format_exception
 import click
 import multiprocessing as mp
 
+if os.name == 'nt':
+    pathlib.PosixPath = pathlib.WindowsPath
+
 from cryovia.gui.path_variables import CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
 
 # CRYOVIA_PATH = Path().home() / ".cryovia"
