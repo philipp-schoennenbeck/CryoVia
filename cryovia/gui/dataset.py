@@ -33,6 +33,12 @@ from grid_edge_detector.image_gui import mask_file
 from cryovia.gui.path_variables import DATASET_PATH
 
 
+if os.name == 'nt':
+    MP_START_METHOD = "spawn"
+else:
+    MP_START_METHOD = "fork"
+
+
 
 DEFAULT_CONFIGS = OrderedDict([
     ("general",OrderedDict([
@@ -102,8 +108,9 @@ def logical_process(pipe, device="GPU"):
     pipe.send(tf.config.list_logical_devices(device))
 
 def get_logical_devices(device="GPU"):
-    con1, con2 = mp.get_context("fork").Pipe()
-    process = mp.get_context("fork").Process(target=logical_process, args=[con1, device])
+    global MP_START_METHOD
+    con1, con2 = mp.get_context(MP_START_METHOD).Pipe()
+    process = mp.get_context(MP_START_METHOD).Process(target=logical_process, args=[con1, device])
     process.start()
     result = con2.recv()
     return result
@@ -410,7 +417,7 @@ class Dataset:
             raise ValueError(f"Cannot perform actions because {self.name} is still zipped. Unzip the dataset first.")
         from keras.backend import clear_session
         if stopEvent is None:
-            stopEvent = mp.get_context("fork").Event()
+            stopEvent = mp.get_context(MP_START_METHOD).Event()
         analysers = []
         args = []
         run_kwargs = deepcopy(run_kwargs)
@@ -497,14 +504,14 @@ class Dataset:
         
 
         lock = manager.Lock()
-        analyser_proccesses = [mp.get_context("fork").Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path]) for q in range(threads)]
+        analyser_proccesses = [mp.get_context(MP_START_METHOD).Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path]) for q in range(threads)]
         [input_queue.put((micrograph, segmentation, analyser, rerun, run_kwargs, counter, self.dataset_path, shapeClassifier, csv, ps)) for counter, (micrograph, segmentation, analyser, csv, ps) in
                         enumerate(zip(self.micrograph_paths, segmentation_paths, analyser_paths, csvs, pixelSizes))]
         
         [p.start() for p in analyser_proccesses]
 
         
-            # with mp.get_context("fork").Pool(njobs) as pool:
+            # with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             
         with tqdm(total=len(analyser_paths), desc=f"{self.name}: Analyzed files ", smoothing=0,file=tqdm_file ) as pbar:
             while any([process.is_alive() for process in analyser_proccesses]):
@@ -949,7 +956,7 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
     Run the analysis, only called by the run method of datasets.
     """
     try:
-        with mp.get_context("fork").Pool(njobs) as pool:
+        with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             while True:
                 try:
                     try:
