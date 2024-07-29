@@ -99,7 +99,7 @@ class ExpandableLabel(QWidget):
         self.layout = QVBoxLayout()
 
         # Create the button to toggle the label
-        self.toggle_button = QPushButton('Show More')
+        self.toggle_button = QPushButton('Click to show usage explanation')
         self.toggle_button.clicked.connect(self.toggle_text)
         self.layout.addWidget(self.toggle_button)
 
@@ -237,6 +237,7 @@ class SegmentationHelper(QWidget):
         self.applyLowPassFilterButton.clicked.connect(self.applyLowPassFilterAlt)
 
         self.applyLowPassFilterLayout = QHBoxLayout()
+        self.applyHighPassFilterLayout = QHBoxLayout()
         self.applyLowPassFilterLayout.addWidget(self.applyLowPassFilterButton)
         self.applyHighPassFilterLayout.addWidget(self.applyLowPassFilterLineEdit)
 
@@ -248,7 +249,7 @@ class SegmentationHelper(QWidget):
         self.applyHighPassFilterButton.clicked.connect(self.applyHighPassFilter)
         self.FilterThresholdLabel = QLabel("Filter threshold")
 
-        self.applyHighPassFilterLayout = QHBoxLayout()
+        
         self.applyHighPassFilterLayout.addWidget(self.FilterThresholdLabel)
         self.applyLowPassFilterLayout.addWidget(self.applyHighPassFilterButton)
         # self.applyHighPassFilterLayout.addWidget(self.applyHighPassFilterLineEdit)
