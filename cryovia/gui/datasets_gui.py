@@ -1298,7 +1298,7 @@ class DatasetInfoWidget(QWidget):
         if len(selection) != 1:
             return
         
-        dataset = selection[0].dataset
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
 
         if dataset.isZipped:
             
@@ -1362,7 +1362,7 @@ class DatasetInfoWidget(QWidget):
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
         if len(selection) != 1:
             return
-        dataset = selection[0].dataset
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
         dlg = QFileDialog()
 
         file_suffixes = " *.csv"
@@ -1405,7 +1405,7 @@ class DatasetInfoWidget(QWidget):
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
         if len(selection) != 1:
             return
-        dataset = selection[0].dataset
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
         dataset.removeMicrographPaths(all=True)
         self.loadDatasetInfo(dataset)
 
@@ -1414,7 +1414,7 @@ class DatasetInfoWidget(QWidget):
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
         if len(selection) != 1:
             return
-        dataset = selection[0].dataset
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
         self.loadDatasetInfo(dataset)
 
 
@@ -1423,7 +1423,7 @@ class DatasetInfoWidget(QWidget):
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
         if len(selection) != 1:
             return
-        dataset = selection[0].dataset
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
         dlg = QFileDialog()
 
         file_suffixes = " *".join([".mrc", ".rec", ".MRC", ".REC", ".png", ".jpg", ".jpeg"])
@@ -2009,8 +2009,7 @@ class runButtonWidget(QPushButton):
     def runAnalysis(self):
         global MESSAGE
         selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
-        selection = [item for item in selection if not running(item.dataset.name)]
-
+        selection = [self.mainWindow().datasetListWidget.listWidget.itemWidget(item) for item in selection if not running(self.mainWindow().datasetListWidget.listWidget.itemWidget(item).dataset.name)]
         if any([item.dataset.isZipped for item in selection]):
             MESSAGE(f"Cannot run analysis because some datasets are still zipped.")
             return
@@ -2840,6 +2839,9 @@ class MicrographPreviewDelegate(QStyledItemDelegate):
         # width = option.rect.width() - CELL_PADDING * 2
         # width = (option.rect.width() - CELL_PADDING * 2) // 2
         # height = option.rect.height() - CELL_PADDING * 2
+
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
         width = (option.rect.width() - CELL_PADDING * 2) // 2
         height = option.rect.height() - CELL_PADDING * 2
 
@@ -2891,6 +2893,8 @@ class PreviewDelegate(QStyledItemDelegate):
         if data is None:
             
             return
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
         # painter.save()
         # width = option.rect.width() - CELL_PADDING * 2
         # width = (option.rect.width() - CELL_PADDING * 2) // 2
@@ -3612,7 +3616,7 @@ class MicrographInspectionButton(QPushButton):
 
             items = listwidget.selectedItems()
             if len(items) == 1:
-                dataset = items[0].dataset
+                dataset = listwidget.itemWidget(items[0]).dataset
                 if dataset.isZipped:
                     MESSAGE(f"Cannot inspect dataset {dataset.name} because it is still zipped.")
                     return

@@ -1108,7 +1108,6 @@ class Analyser:
         
         self.findNeighbours(max_neighbour_dist)
         all_curvatures = {}
-        print(os.environ["CRYOVIA_MODE"])
 
         for membrane in self.membranes:
             membrane:Membrane
