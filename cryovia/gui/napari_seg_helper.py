@@ -127,7 +127,7 @@ class ExpandableLabel(QWidget):
         if self.label.isVisible():
             self.label.setVisible(False)
             self.scroll_area.setVisible(False)
-            self.toggle_button.setText('Show More')
+            self.toggle_button.setText('Click to show usage explanation')
         else:
             self.label.setVisible(True)
             self.scroll_area.setVisible(True)
@@ -163,7 +163,11 @@ class SegmentationHelper(QWidget):
         self.setLayout(QVBoxLayout())
 
         long_text = (
-            "This napari window should only be used to create segmentations for CryoVia.\n"
+            "This napari window should only be used to create segmentations for CryoVia. Do not delete any of the loaded layers.\n"
+            "You can load in files and manually segment these files. The segmentation is saved as a stack of segmented slices which each membrane having a separate slice."
+            "The slices will be automatically created if you press next membrane (or press w) while being on the latest slice."
+            "The plugin also checks if you created multiple segmentation on the same slice and separates them if necessary."
+            "If you opened this napari window while selecting a segmentation model, the segmented files will be added to the training files of that model."
             "Usage:\n"
             "Load/add files: Load in micrograph files to manually segment.\n"
             "Choose save directory: Choose a directory, in which the segmentations will be saved. By default this will be the current working directory\n"
