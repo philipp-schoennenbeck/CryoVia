@@ -351,12 +351,12 @@ def GUI():
     """
     global cryovia, CreateNewShapesWindow, SegmentationWindow, segmentationModel, Config, DatasetGui, Dataset, MainWindow
     cryovia = __import__("cryovia", globals(), locals())
-    CreateNewShapesWindow = __import__("cryovia.gui.shape_drawer", globals(), locals()).gui.shape_drawer.CreateNewShapesWindow
-    SegmentationWindow = __import__("cryovia.gui.membrane_segmentation", globals(), locals()).gui.membrane_segmentation.SegmentationWindow
+    CreateNewShapesWindow = __import__("cryovia.gui.shape_classifier_gui", globals(), locals()).gui.shape_classifier_gui.CreateNewShapesWindow
+    SegmentationWindow = __import__("cryovia.gui.membrane_segmentation_gui", globals(), locals()).gui.membrane_segmentation_gui.SegmentationWindow
     segmentationModel = __import__("cryovia.gui.segmentation_files.segmentation_model", globals(), locals()).gui.segmentation_files.segmentation_model.segmentationModel
     Config = __import__("cryovia.gui.segmentation_files.segmentation_model", globals(), locals()).gui.segmentation_files.segmentation_model.Config
     DatasetGui = __import__("cryovia.gui.datasets_gui", globals(), locals()).gui.datasets_gui.DatasetGui
-    Dataset = __import__("cryovia.gui.dataset", globals(), locals()).gui.dataset.Dataset
+    Dataset = __import__("cryovia.cryovia_analysis.dataset", globals(), locals()).cryovia_analysis.dataset.Dataset
     MainWindow = __import__("grid_edge_detector.image_gui", globals(), locals()).image_gui.MainWindow
     
     

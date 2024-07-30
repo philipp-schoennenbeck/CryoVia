@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 from cryovia.cryovia_analysis.analyser import Analyser , AnalyserWrapper
 import pickle
-from cryovia.gui.shape_classifier import get_classifier_dict, ShapeClassifierFactory, ShapeClassifier
+from cryovia.cryovia_analysis.shape_classifier import get_classifier_dict, ShapeClassifierFactory, ShapeClassifier
 from cryovia.gui.segmentation_files.segmentation_model import get_segmentation_dict, segmentationModelFactory, segmentationModel, Config
 # from cryovia.gui.datasets_gui import DEFAULT_CONFIGS
 import numpy as np
@@ -24,8 +24,8 @@ import time
 from collections import OrderedDict
 import tarfile
 
-from cryovia.gui.shape_classifier import get_all_classifier_names
-from cryovia.gui.membrane_segmentation import get_all_segmentation_model_names
+from cryovia.cryovia_analysis.shape_classifier import get_all_classifier_names
+from cryovia.gui.membrane_segmentation_gui import get_all_segmentation_model_names
 from grid_edge_detector.carbon_edge_detector import find_grid_hole_per_file
 from cryovia.gui.segmentation_files.prep_training_data import load_file
 from cryovia.cryovia_analysis.custom_utils import resizeSegmentation
@@ -914,7 +914,7 @@ class Dataset:
                     dataset = CustomUnpickler(f).load()
             elif path.is_dir() and (path / "dataset.pickle").exists():
                 with open(path / "dataset.pickle", "rb") as f:
-                    dataset = pickle.load(f)
+                    dataset = CustomUnpickler(f).load()
             else:
                 raise FileExistsError(path)
             if not hasattr(dataset, "times"):
@@ -933,7 +933,7 @@ class Dataset:
                     dataset = CustomUnpickler(f).load()
             elif path.is_dir() and (path / "dataset.pickle").exists():
                 with open(path / "dataset.pickle", "rb") as f:
-                    dataset = pickle.load(f)
+                    dataset = CustomUnpickler(f).load()
             else:
                 raise FileExistsError(path)
             if not hasattr(dataset, "times"):

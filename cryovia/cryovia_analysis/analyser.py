@@ -28,7 +28,6 @@ from cryovia.cryovia_analysis.skeletonizer import Skeletonizer, RidgeDetector
 from cryovia.cryovia_analysis.membrane import Membrane
 from cryovia.cryovia_analysis.point import Point
 import cryovia.cryovia_analysis.custom_utils as utils 
-from cryovia.gui.shape_classifier import ShapeClassifier
 
 from cryovia.gui.Unpickler import CustomUnpickler
 

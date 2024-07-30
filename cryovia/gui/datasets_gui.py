@@ -19,14 +19,14 @@ from matplotlib.figure import Figure
 
 from collections import OrderedDict
 import typing
-from cryovia.gui.shape_drawer import *
+from cryovia.gui.shape_classifier_gui import *
 from cryovia.cryovia_analysis.custom_utils import resizeMicrograph
 from cv2 import circle 
 # from cryovia.gui.membrane_segmentation import * 
 import pandas as pd
 from scipy.ndimage import label
 
-from cryovia.gui.dataset import Dataset, get_all_dataset_names, dataset_factory, get_all_dataset_paths, DEFAULT_CONFIGS
+from cryovia.cryovia_analysis.dataset import Dataset, get_all_dataset_names, dataset_factory, get_all_dataset_paths, DEFAULT_CONFIGS
 from cryovia.gui.segmentation_files.prep_training_data import load_file
 import seaborn as sns
 from io import TextIOWrapper, BytesIO

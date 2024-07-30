@@ -1267,7 +1267,6 @@ class TrainWidget(QWidget):
                 window.add_dock_widget(SegmentationHelper(viewer, files=files, custom_parent=self, segmentation_model=m,default_pixel_size=pixel_size)) #"cryovia Segmentation Helper"
             else:
                 window.add_dock_widget(SegmentationHelper(viewer, files=files, custom_parent=self,default_pixel_size=pixel_size))
-            print(window.add_dock_widget)
             viewer.show()
 
             

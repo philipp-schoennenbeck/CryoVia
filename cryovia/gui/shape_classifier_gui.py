@@ -15,7 +15,7 @@ from pathlib import Path
 import typing
 import os
 import shutil
-from cryovia.gui.shape_classifier import ShapeClassifier, ShapeClassifierFactory, get_all_classifier_paths, get_all_classifier_names, PROTECTED_SHAPES, SHAPE_CURVATURE_PATH, get_all_shapes
+from cryovia.cryovia_analysis.shape_classifier import ShapeClassifier, ShapeClassifierFactory, get_all_classifier_paths, get_all_classifier_names, PROTECTED_SHAPES, SHAPE_CURVATURE_PATH, get_all_shapes
 import qimage2ndarray as q2np
 from PIL import Image, ImageOps
 
