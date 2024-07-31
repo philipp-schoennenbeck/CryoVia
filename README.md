@@ -1,3 +1,6 @@
+# Usage
+For usage see [Usage](How_to_use.md)
+
 # Installation
 
 ## Linux
