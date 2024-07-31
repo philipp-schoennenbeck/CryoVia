@@ -634,7 +634,7 @@ class DatasetTabsWidget(QTabWidget):
             median = np.median(data[column])
             median_absolute_deviation = np.median(np.abs(data[column] - np.median(data[column])))
             entries = len(data[column])
-            text = f"{name}: {column}\nNumber of membranes: {entries}\nMinimum: {min_}\nMaximum: {max_}\nMean: {mean}\nStd: {std}\nMedian: {median}\nMedian absolute deviation: {median_absolute_deviation}\n"
+            text = f"\n{name}: {column}\nNumber of membranes: {entries}\nMinimum: {min_}\nMaximum: {max_}\nMean: {mean}\nStd: {std}\nMedian: {median}\nMedian absolute deviation: {median_absolute_deviation}\n"
             MESSAGE(text)
 
 
@@ -3875,6 +3875,7 @@ class DatasetGui(QWidget):
         return super().closeEvent(a0)
 
     def newMessage(self, message:str, update=False):
+        self.messageBoard.moveCursor(QTextCursor.End)
         cursor = self.messageBoard.textCursor()
         cursor.insertText(message)
         self.messageBoard.moveCursor(QTextCursor.End)

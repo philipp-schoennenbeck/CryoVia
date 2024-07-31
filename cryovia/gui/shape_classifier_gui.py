@@ -668,10 +668,10 @@ class ShapesListWidget(QWidget):
         self.usedListWidget = QListWidget(self)
         
         # print(self.usedListWidget.sizePolicy().)
-        self.usedListWidget.setFixedSize(120,100)
+        # self.usedListWidget.setFixedSize(120,100)
 
         self.unusedListWidget = QListWidget(self)
-        self.unusedListWidget.setFixedSize(120,100)
+        # self.unusedListWidget.setFixedSize(120,100)
 
 
         self.usedListWidget.itemSelectionChanged.connect(self.clear_unused_selection)

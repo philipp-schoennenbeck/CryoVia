@@ -13,8 +13,10 @@ cryovia/__pycache__/__init__.cpython-39.pyc
 cryovia/cryovia_analysis/__init__.py
 cryovia/cryovia_analysis/analyser.py
 cryovia/cryovia_analysis/custom_utils.py
+cryovia/cryovia_analysis/dataset.py
 cryovia/cryovia_analysis/membrane.py
 cryovia/cryovia_analysis/point.py
+cryovia/cryovia_analysis/shape_classifier.py
 cryovia/cryovia_analysis/skeletonizer.py
 cryovia/cryovia_analysis/sknw.py
 cryovia/cryovia_analysis/sknw_utils.py
@@ -48,13 +50,11 @@ cryovia/default_models/Shape_curvatures/stomatocyte.npy
 cryovia/default_models/Shape_curvatures/tube.npy
 cryovia/gui/Unpickler.py
 cryovia/gui/__init__.py
-cryovia/gui/dataset.py
 cryovia/gui/datasets_gui.py
-cryovia/gui/membrane_segmentation.py
+cryovia/gui/membrane_segmentation_gui.py
 cryovia/gui/napari_seg_helper.py
 cryovia/gui/path_variables.py
-cryovia/gui/shape_classifier.py
-cryovia/gui/shape_drawer.py
+cryovia/gui/shape_classifier_gui.py
 cryovia/gui/starting_menu.py
 cryovia/gui/__pycache__/Unpickler.cpython-39.pyc
 cryovia/gui/__pycache__/__init__.cpython-311.pyc
