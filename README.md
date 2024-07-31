@@ -1,39 +1,83 @@
 # Installation
 
-mkdir CryoViaInstallation
+## Linux
 
-cd CryoViaInstallation
+### Creating directories
+```mkdir CryoViaInstallation```
 
-git clone https://github.com/philipp-schoennenbeck/CryoVia
+```cd CryoViaInstallation```
 
-git clone https://github.com/philipp-schoennenbeck/GridEdgeDetector
+```git clone https://github.com/philipp-schoennenbeck/CryoVia```
 
-conda create -n cryovia python=3.9.16
+```git clone https://github.com/philipp-schoennenbeck/GridEdgeDetector```
 
-conda activate cryovia
+### Creating python environment
+```conda create -n cryovia python=3.9.16```
 
-conda install -c conda-forge cudatoolkit=11.8.0
+```conda activate cryovia```
 
-python3 -m pip install nvidia-cudnn-cu11==8.6.0.163 tensorflow==2.12.*
+### Installing tensorflow 
 
-mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+```conda install -c conda-forge cudatoolkit=11.8.0```
 
-echo 'CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+```python3 -m pip install nvidia-cudnn-cu11==8.6.0.163 tensorflow==2.12.*```
 
-echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/:$CUDNN_PATH/lib' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+```mkdir -p $CONDA_PREFIX/etc/conda/activate.d```
 
-source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+```echo 'CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh```
 
-### Verify install:
-python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/:$CUDNN_PATH/lib' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh```
 
-### Make sure you are in the cryovia folder (the folder with the setup.py file)
-cd CryoVia
+```source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh```
 
-pip install .
+### Verifying tensorflow install
+```python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"```
 
-### Install the GridEdgeDetector repo
-cd ../GridEdgeDetector
+### Installing CryoVia
+```cd CryoVia```
 
-pip install .
-<!-- pip install git+https://github.com/philipp-schoennenbeck/GridEdgeDetector.git -->
+```pip install .```
+
+### Install GridEdgeDetector
+```cd ../GridEdgeDetector```
+
+```pip install .```
+
+
+## Windows
+
+### Creating directories
+```mkdir CryoViaInstallation```
+
+```cd CryoViaInstallation```
+
+```git clone https://github.com/philipp-schoennenbeck/CryoVia```
+
+```git clone https://github.com/philipp-schoennenbeck/GridEdgeDetector```
+
+### Creating python environment
+```conda create -n cryovia python=3.9.16```
+
+```conda activate cryovia``
+
+### Installing tensorflow
+
+```conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0```
+
+```pip install tensorflow==2.10```
+
+```pip install numpy==1.21.6```
+
+### Verifying tensorflow install
+
+```python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"```
+
+### Installing CryoVia
+```cd CryoVia```
+
+```pip install .```
+
+### Install GridEdgeDetector
+```cd ../GridEdgeDetector```
+
+```pip install .`

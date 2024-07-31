@@ -2,7 +2,7 @@
 
 ## Installation
 
-See README.md
+See [README](README.md)
 
 ## Usage
 
