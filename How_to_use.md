@@ -58,4 +58,55 @@ You will see the starting menu of CryoVia:
 27. Shows the curvature values along the membrane contour for the currently selected row in the table view.
 28. Message board: CryoVia will print some information here during analysis and loading of data.
 
+### Neural Network
 
+![Neural network](example_screenshots/segmentation_classifier_a.png "Neural network")
+
+1. Available models: A list of all available segmentation models. You can remove, create, copy, train and set the parameters with the bottom buttons. 
+2. Processing parameters: You can set the number of usable parallel cores and which GPU to use during training and predicting.
+3. Add training data: Adds training data to the currently selected model. Training data is micrograph and its segmentation. Opens two file explorers. In the first you have to select micrographs and in the second the corresponding segmentations. It should be the same amount of files. Both lists of files will be alphabetically sorted and each micrograph gets its segmentation. 
+4. Clear training data: Removes all training data from the currently selected model.
+5. Open napari: Opens napari to manually segment micrographs for the currently selected model. See TODO
+6. TRAIN: Trains the currently selected model with all given training data and parameters.
+7. Run active learning: Opens a file explorer to select micrographs. The currently selected model will predict the segmentation of the micrographs. The most unsure predicted micrographs will be selected and opened in napari for manual segmentation. The number of selected unsure micrographs can be set above.
+8. Predict images: Opens a file explorer to select micrographs to predict with the currently selected model. Can be saved as various file formats. Identify instances can be set to solve overlapping membranes. Save intermediate files will not only save the last prediction but also some intermediate files.
+9. All the parameters for the currently selected model. If a new model is created all parameters can be set. Once the model has been trained some of the parameters are locked in.
+10. Training loss: The graph of validation loss and normal loss during training. All training cycles are shown as a contiuous graph.
+11. Message board: CryoVia will print some information here during training and loading of data.
+
+### Shape classifier
+
+![Shape classifier](example_screenshots/shape_classifier_a.png "Shape classifier")
+
+1. Available classifiers: A list of available classifier models.
+2. Type: The model the classifier uses. It is either a Gradient boostin model or a small 1D-Convolutional neural network.
+3. Only closed: Whether to only use closed vesicles. The classification is more precise using only closed vesicles but cannot predict non-closed vesicles.
+4. Remove the currently selected classifier.
+5. Create a new classifier.
+6. Create a copy of the currently selected classifier.
+7. Train the currently selected classifier.
+8. Show the confusion matrix of the last training iteration of the currently selected classifier.
+9. Used shapes: All the shapes used for training of the currently selected classifier.
+10. Available shapes: All the shapes available and not used for training of the currently selected classifier.
+11. Move shapes from the left to the right.
+12. Move shapes from the right to the left.
+13. Create a completly new shape object.
+14. Remove this shape object.
+15. Drawer window: Here you can draw new shapes. By pressing the "+" the curvature of these shapes will be calculated and added to the selected shape object. 
+16. \+: The curvature of the currently drawn shape will be calculated and added to the selected shape object. Multiple variations of this shape will be created depending on which of "Rotate", "Flip" and "Vary size" are selected. 
+17. Clear the drawing window.
+18. Rotate: Create three variations of the drawn shape by rotating. Flip: Multiply the amount of variations by two by flipping them. Vary size: Create more variations by resizing the draw shape. Ideally these variations are not needed because of the normalization but using these leads to more consistent classification.
+19. Message board: CryoVia will print some information here during training.
+
+![Grid edge detector](example_screenshots/grid_edge_detector_a.png "Grid edge detector")
+
+1. Files: You can load files, import CryoVia datasets, CryoSparc picking jobs, relion picking jobs and export as masks or fitting to the CryoVia, CroySparc or relion task.
+2. The current status of the grid edge detection.
+3. The histogram of the currently selected image of the found difference of mean inside and mean outside of the hole.
+4. In order: The currently selected image, the used image for the calculation (with cropping, resizing, high pass filtering), the difference map, the found mask.
+5. Parameters set for the currently selected image. Can be set for multiple images at the same time.
+6. Inverse: Will inverse the mask of the currently selected image.
+7. Parameters set for all images.  
+8. Will mask all loaded images with the given parameters.
+9. Will mask only the selected images with the given parameters.
+10. Opens a window to differentiate between images containing only ice or only carbon by using the mean value of the images where no edge was found. Ideally a clear cut can be seen between these types of images.
