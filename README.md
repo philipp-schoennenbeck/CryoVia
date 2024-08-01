@@ -61,7 +61,7 @@ For usage see [Usage](How_to_use.md)
 ### Creating python environment
 ```conda create -n cryovia python=3.9.16```
 
-```conda activate cryovia``
+```conda activate cryovia```
 
 ### Installing tensorflow
 
