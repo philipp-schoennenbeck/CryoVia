@@ -83,4 +83,4 @@ For usage see [Usage](How_to_use.md)
 ### Install GridEdgeDetector
 ```cd ../GridEdgeDetector```
 
-```pip install .`
+```pip install .```
