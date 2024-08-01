@@ -823,14 +823,13 @@ class Membrane(dict):
             if len(self.is_enclosed_in) > 0:
                 distances = []
                 self_coords = self.coords
-                for lab_nr, lab in self.analyser.order_dir.items():
-                    if lab_nr in self.is_enclosed_in:
-                        for path_nr, path_instance in enumerate(lab):
-                            if path_instance.label == self.label:
-                                continue 
-                            path_coords = path_instance.coords
-                            dist = cdist(self_coords, path_coords)
-                            distances.append(np.min(dist))
+                for membrane in self.analyser:
+                    if membrane.membrane_idx in self.is_enclosed_in:
+                        
+                        
+                        coords = membrane.coords
+                        dist = cdist(self.coords, coords)
+                        distances.append(np.min(dist))
                 if len(distances) > 0:
                     self._distance_to_enclosing_vesicle = np.min(distances) *self.analyser.pixel_spacing
         return self._distance_to_enclosing_vesicle

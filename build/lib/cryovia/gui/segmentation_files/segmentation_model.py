@@ -33,7 +33,9 @@ import shutil
 from cryovia.gui.Unpickler import CustomUnpickler
 import sys
 from matplotlib import pyplot as plt
-SEGMENTATION_MODEL_DIR = Path().home() / ".cryovia" / "SegmentationModels"
+from cryovia.gui.path_variables import SEGMENTATION_MODEL_DIR
+
+# SEGMENTATION_MODEL_DIR = Path().home() / ".cryovia" / "SegmentationModels"
 
 
 
@@ -662,7 +664,7 @@ class segmentationModel:
 
     @property
     def writable(self):
-        return self.name != "Default"
+        return self.name != "Default" and self.name != "Default_thin" 
 
     def __str__(self) -> str:
         return self.name

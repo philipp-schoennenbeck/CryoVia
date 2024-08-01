@@ -93,7 +93,7 @@ class Point:
     
     def is_center_right(self):
         b = self.tangent_vector
-        p = np.float128(self.circle_center_yx) - np.float128(self.coordinates_yx)
+        p = np.float64(self.circle_center_yx) - np.float64(self.coordinates_yx)
         if np.all(np.isclose(p,0)):
             return False
         cross_product = np.cross(b,p)
@@ -111,7 +111,7 @@ class Point:
 
 
     def in_polygon(self, polygon, save_path=None):
-        p = np.float128(self.circle_center_yx) - np.float128(self.coordinates_yx)
+        p = np.float64(self.circle_center_yx) - np.float64(self.coordinates_yx)
         p = p / np.linalg.norm(p)
         pt = (self.coordinates_yx + p*2).astype(np.int32)
         pt = np.clip(pt, (0,0), [i-1 for i in polygon.shape])

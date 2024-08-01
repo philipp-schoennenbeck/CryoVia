@@ -1,5 +1,6 @@
 import sys, shutil, os 
 from pathlib import Path
+import pathlib
 import silence_tensorflow.auto
 
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QMainWindow, QToolButton, QMessageBox
@@ -11,8 +12,14 @@ from traceback import format_exception
 
 import click
 import multiprocessing as mp
+if os.name == 'nt':
+    pathlib.PosixPath = pathlib.WindowsPath
 
-CRYOVIA_PATH = Path().home() / ".cryovia"
+
+from cryovia.gui.path_variables import CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
+
+# CRYOVIA_PATH = Path().home() / ".cryovia"
+
 
 
 def copyShapeCurvatures():
@@ -76,18 +83,20 @@ def checkDefaultSegmentationModel():
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
 
-    if not (CRYOVIA_PATH / "SegmentationModels" / "Default").exists():
-        default_path = cryovia_install_dir / "default_models" / "Default"
-        if not default_path.exists():
-            raise FileNotFoundError(default_path)
-        weights_path = default_path / "best_weights.h5"
-        pickle_path = default_path / "Segmentator.pickle"
-        if not weights_path.exists():
-            raise FileNotFoundError(weights_path)
-        if not pickle_path.exists():
-            raise FileNotFoundError(pickle_path)
-        shutil.copytree(default_path, CRYOVIA_PATH / "SegmentationModels" / "Default")
-        print(f"Copy default segmentation model")
+    for modelname in ["Default", "Default_thin"]:
+
+        if not (CRYOVIA_PATH / "SegmentationModels" / modelname).exists():
+            default_path = cryovia_install_dir / "default_models" / modelname
+            if not default_path.exists():
+                raise FileNotFoundError(default_path)
+            weights_path = default_path / "best_weights.h5"
+            pickle_path = default_path / "Segmentator.pickle"
+            if not weights_path.exists():
+                raise FileNotFoundError(weights_path)
+            if not pickle_path.exists():
+                raise FileNotFoundError(pickle_path)
+            shutil.copytree(default_path, CRYOVIA_PATH / "SegmentationModels" / modelname)
+            print(f"Copy {modelname} segmentation model")
 
 
 
@@ -295,7 +304,8 @@ class StringListParamType(click.ParamType):
 @click.option("-n", "--njobs", help="Number of njobs to load in and save files. For analysing you can specify other values in the GUI. Default is number of cores/2.",
                type=click.IntRange(1,mp.cpu_count(),clamp=True), default=max(1, mp.cpu_count() // 2))
 @click.option("-g", "--gpus", help="List of GPUs to be available to use (as integers in cuda), seperated by comma without spaces. Default is all available GPUs.", type=StringListParamType())
-def startGui(njobs, gpus):
+@click.option("--debug", is_flag=True, help="Enable debug mode", hidden=True, default=False)
+def startGui(njobs, gpus, debug):
     """
     Starts the CryoVia GUI.
     Parameters
@@ -307,7 +317,16 @@ def startGui(njobs, gpus):
     -------
     
     """
-    
+    if debug:
+        global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
+        CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
+        SEGMENTATION_MODEL_DIR .reAssign(CRYOVIA_PATH / "SegmentationModels")
+        CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
+        SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
+        cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
+        DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
+
+        os.environ["CRYOVIA_MODE"] = "1"
 
     if gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(i) for i in gpus])
@@ -332,12 +351,12 @@ def GUI():
     """
     global cryovia, CreateNewShapesWindow, SegmentationWindow, segmentationModel, Config, DatasetGui, Dataset, MainWindow
     cryovia = __import__("cryovia", globals(), locals())
-    CreateNewShapesWindow = __import__("cryovia.gui.shape_drawer", globals(), locals()).gui.shape_drawer.CreateNewShapesWindow
-    SegmentationWindow = __import__("cryovia.gui.membrane_segmentation", globals(), locals()).gui.membrane_segmentation.SegmentationWindow
+    CreateNewShapesWindow = __import__("cryovia.gui.shape_classifier_gui", globals(), locals()).gui.shape_classifier_gui.CreateNewShapesWindow
+    SegmentationWindow = __import__("cryovia.gui.membrane_segmentation_gui", globals(), locals()).gui.membrane_segmentation_gui.SegmentationWindow
     segmentationModel = __import__("cryovia.gui.segmentation_files.segmentation_model", globals(), locals()).gui.segmentation_files.segmentation_model.segmentationModel
     Config = __import__("cryovia.gui.segmentation_files.segmentation_model", globals(), locals()).gui.segmentation_files.segmentation_model.Config
     DatasetGui = __import__("cryovia.gui.datasets_gui", globals(), locals()).gui.datasets_gui.DatasetGui
-    Dataset = __import__("cryovia.gui.dataset", globals(), locals()).gui.dataset.Dataset
+    Dataset = __import__("cryovia.cryovia_analysis.dataset", globals(), locals()).cryovia_analysis.dataset.Dataset
     MainWindow = __import__("grid_edge_detector.image_gui", globals(), locals()).image_gui.MainWindow
     
     
