@@ -4,8 +4,33 @@
 
 See [README](README.md)
 
-## Usage
+[1. General Usage](#general-usage)
 
+ 
+ [&nbsp; &nbsp; 1.1 Starting CryoVia](#starting-cryovia)
+
+ [&nbsp; &nbsp; 1.2 Membrane analyser](#membrane-analyser)
+ 
+ [&nbsp; &nbsp; 1.3 Neural network](#neural-network)
+
+[&nbsp; &nbsp; 1.4 Shape classifier](#shape-classifier)
+
+[2. Example dataset](#example-dataset)
+
+[&nbsp; &nbsp; 2.1 Dataset creation and running analysis](#dataset-creation-and-running-analysis)
+
+[&nbsp; &nbsp; 2.2 Data extraction ana analysis](#data-extraction-and-analysis)
+
+[&nbsp; &nbsp; 2.3 Micrograph inspection](#micrograph-inspection)
+
+[&nbsp; &nbsp; 2.4 Vesicle inspection](#vesicle-inspection)
+
+
+
+
+## General Usage
+
+### Starting CryoVia
 Activate the conda environment:
 
 ```conda activate cryovia```
@@ -110,3 +135,65 @@ You will see the starting menu of CryoVia:
 8. Will mask all loaded images with the given parameters.
 9. Will mask only the selected images with the given parameters.
 10. Opens a window to differentiate between images containing only ice or only carbon by using the mean value of the images where no edge was found. Ideally a clear cut can be seen between these types of images.
+
+
+
+## Example Dataset
+
+We will show an example on how to navigate CryoVia with a small dataset of 11 images. They can be found in the "test_data" directory.
+
+Activate the conda environment:
+
+```conda activate cryovia```
+
+Start CryoVia:
+```cryovia```
+
+### Dataset creation and running analysis
+Now we want to create a dataset and let the segmentation and analysis run.
+
+![Example dataset creation](example_screenshots/created_dataset_a.png "Example dataset creation")
+
+1. New: Create a new dataset. You have to choose where to save it. You can then rename it with a double click on the name.
+2. Add micrographs: You have to add the micrographs you want to analyse to the dataset. Just select all the images found in "test_data".
+3. Run analysis: Next, you want to run the segmentation and the analysis for the dataset. Clicking this will open a parameter window where you can choose various parameters and models.
+
+![Parameter window](example_screenshots/run_parameters_a.png "Parameter window")
+
+4. We will keep almost all of the default parameters but we will change the segmentation model to use the model which was trained to predict very thin membranes because in the test dataset there are a few very close membranes and this helps to separate them more consistently.
+
+Then we confirm the parameters, select how much parallelization we want to use and the rest is done by CryoVia.
+
+### Data extraction and analysis
+
+After running the segmentation and analysis you can look at the results.
+
+![Example dataset results](example_screenshots/data_analysis_a.png "Example dataset results")
+
+1. Select the dataset we just ran the analysis on.
+2. You can look at the segmentation results for each micrograph and remove unwanted micrographs or membranes. These results are already cleaned. So only completely segmented vesicles are beeing used. (See TODO)
+3. To load in the results for the whole dataset click "Data >>" and it will load in the data about each vesicle into to table view in the middle.
+4. In this table view every row represents a vesicle and the columns indicate their attributes. You can remove incorrectly segmented membranes with the ```del``` key. If you click on any column it will show you the results for the whole dataset in the graph at 9. You can also display all loaded in datasets by clicking "Show all".
+5. You can filter the table in 4 by creating filters here.
+6. After creating filter you have to apply these to the table view.
+7. You can export the table as a csv file.
+8. You can also have an overview of all membranes currently in the table. This will show each vesicle and its segmentation in a separate window. You can also delete membranes from the dataset in this window by selecting objects and pressing ```del```. See TODO
+9. Here you will see graphs for the selected attributes for the whole dataset(s).
+10. Here you will see individual information about the currently selected vesicle in the table.
+
+### Micrograph inspection
+
+Here you can inspect the segmentation of the micrographs, remove micrographs or specific membranes.
+![Micrograph inspection](example_screenshots/inspect_a.png "Micrograph inspection")
+1. Fill vesicles: Changes the way the vesicles are represented. Can be easier to click specifc vesicles, but can be confusing when dealing with enclosed vesicles.
+2. You can change the size of the shown images. Can also be done with ```CTRL + Mouse wheel```.
+3. Only 100 images at a time are shown to not load all the data at once. Here you can change which one you want to see.
+4. Will focus the next/previous membrane in the selected micrograph. Can be used to manually inspect membranes an remove them. You can also ```Right click``` on a membrane to focus it. You have to be precice though and zooming on often helps with this.
+5. You can remove this micrograph from the dataset. This will be applied when closing this window.
+6. You can remove this membrane from the dataset. This will be applied when closing this window.
+
+
+### Vesicle inspection
+Here you can inspect every single membrane/vesicle segmented from the current table. You can Zoom with ```CTRL + Mouse Wheel``` and remove selected membranes from the dataset with ```del```
+
+![Vesicle Inspection](example_screenshots/membrane_inspection.png "Vesicle Inspection")

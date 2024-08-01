@@ -3176,7 +3176,8 @@ class MicrographInspectionWindow(QWidget):
         elif index < 1:
             index = data.max_index
         # self.delegate.reset_index()
-        data.reset_index(self.delegate.last_index)
+        if self.delegate.last_index is not None:
+            data.reset_index(self.delegate.last_index)
 
         if max_index == 0:
             self.delegate.last_index = None
@@ -3331,7 +3332,14 @@ class MicrographInspectionWindow(QWidget):
     #     return QSize(1250, 850)
         
     def selectionChanged(self, event=None):
-        idxs = self.view.selectionModel().selectedIndexes()
+        if self.delegate.last_data is not None:        
+            data = self.delegate.last_data
+            data.reset_index(self.delegate.last_index)
+        self.delegate.last_index = None
+        self.delegate.last_data = None
+        self.focusNextMembrane()
+        # idxs = self.view.selectionModel().selectedIndexes()
+        # print(idxs)
 
 
     def load_files(self):
