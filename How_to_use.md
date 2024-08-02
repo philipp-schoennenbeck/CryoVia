@@ -155,7 +155,7 @@ Now we want to create a dataset and let the segmentation and analysis run.
 ![Example dataset creation](example_screenshots/created_dataset_a.png "Example dataset creation")
 
 1. New: Create a new dataset. You have to choose where to save it. You can then rename it with a double click on the name.
-2. Add micrographs: You have to add the micrographs you want to analyse to the dataset. Just select all the images found in "test_data".
+2. Add micrographs: Select the newly created dataset in the list. After clicking "Add micrographs" you have to choose the micrographs you want to add to the dataset. Just select all the images found in "test_data".
 3. Run analysis: Next, you want to run the segmentation and the analysis for the dataset. Clicking this will open a parameter window where you can choose various parameters and models.
 
 ![Parameter window](example_screenshots/run_parameters_a.png "Parameter window")

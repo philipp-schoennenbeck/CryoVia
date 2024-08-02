@@ -701,6 +701,7 @@ class segmentationModel:
         loadInQueue = mp.get_context("spawn").Queue(threads)
         predictionQueue = mp.get_context("spawn").Queue(threads)
         outputQueue = mp.get_context("spawn").Queue()
+        errorQueue = mp.get_context("spawn").Queue()
         njobs = threads * njobs
 
         number_of_loader_proccesses = max(1, int((njobs - len(gpu)) * 1/3))
@@ -709,14 +710,14 @@ class segmentationModel:
         loaderFinishedEvent = mp.get_context("spawn").Event()
         predictorFinishedEvent = mp.get_context("spawn").Event()
         
-        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config)) for _ in range(number_of_loader_proccesses)]
+        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config, errorQueue)) for _ in range(number_of_loader_proccesses)]
 
 
-        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent )) for gpu_idx in range(len(gpu))]
+        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue )) for gpu_idx in range(len(gpu))]
 
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
-        unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path)) for _ in range(number_of_unpatchifyer_procceses)]
+        unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path,errorQueue)) for _ in range(number_of_unpatchifyer_procceses)]
 
         if stopEvent.is_set():
             return {}
@@ -767,8 +768,24 @@ class segmentationModel:
                     
                     break
            
+        
         gc.collect()
-        # tf.keras.backend.clear_session()
+        
+
+        if not errorQueue.empty():
+            tqdm_file.write("Something went wrong during segmentation. Following errors occurred:\n")
+            errorsFound = []
+            while not errorQueue.empty():
+                errorsFound.append(errorQueue.get())
+            
+            for error in errorsFound:
+                tqdm_file.write(error)
+                tqdm_file.write("\n")
+            for processes in [loaders, predictors, unpatchifyers]:
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+            return None
         return results
 
 
@@ -782,41 +799,45 @@ def normalize(x):
     return x
 
 
-def loadPathsProcess(inputqueue, outputqueue, config):
+def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue):
     
     # import tensorflow as tf
     # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     # # tf.config.set_visible_devices([], 'GPU')
     # with tf.device('/CPU:0'):
-    while True:
-        try:
-            path,ps = inputqueue.get(timeout=5)
-        except queue.Empty:
-            if inputqueue.empty():
-                return
-            continue 
+    counter = 0
+    try:
+        while True:
+            try:
+                path,ps = inputqueue.get(timeout=5)
+            except queue.Empty:
+                if inputqueue.empty():
+                    return
+                continue 
+
+            turned_patches_total = []
+
+            x_pred, shape = loadPredictData([path], config, ps)
+
+
+            x_pred = normalize(x_pred)
+            x_pred = x_pred[0]
+            shape = shape[0]
+
+            for patch in x_pred:
+                turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
+                turned_patches_total.extend(turned_patches)
+            turned_patches = np.array(turned_patches_total)
+            # turned_patches = tf.constant(turned_patches)
         
-        turned_patches_total = []
-
-        x_pred, shape = loadPredictData([path], config, ps)
-
-
-        x_pred = normalize(x_pred)
-        x_pred = x_pred[0]
-        shape = shape[0]
-
-        for patch in x_pred:
-            turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
-            turned_patches_total.extend(turned_patches)
-        turned_patches = np.array(turned_patches_total)
-        # turned_patches = tf.constant(turned_patches)
-       
-        outputqueue.put((path, turned_patches, shape))
-    
-
+            outputqueue.put((path, turned_patches, shape))
+    except Exception as e:
+        errorQueue.put(traceback.format_exc())
+        raise e
 import time
 
-def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event ):
+def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue ):
+    counter = 0
     try:
 
         os.environ["CUDA_VISIBLE_DEVICES"]=str(gpu_idx)   
@@ -892,6 +913,8 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                         tf.keras.backend.clear_session()
                         return
                     continue
+
+
                 turned_patches = tf.convert_to_tensor(turned_patches)
 
                 for i in range(0, len(turned_patches), working_batch_size):
@@ -902,64 +925,69 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                 outputqueue.put((path, prediction, shape))
     except Exception as e:
         tf.keras.backend.clear_session()
-        print(traceback.format_exc())
-
+        errorQueue.put(traceback.format_exc())
         raise e
 
 
-def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_path, mask_path):
-    while True:
-        try:
-            path, prediction, shape = inputqueue.get(timeout=5)
-        except queue.Empty:
-            if event.is_set():
-                return
-            continue
+def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_path, mask_path, errorQueue):
+    counter = 0
+    try:
+        while True:
+            try:
+                path, prediction, shape = inputqueue.get(timeout=5)
+            except queue.Empty:
+                if event.is_set():
+                    return
+                continue
             
 
-        predictions = softmax(prediction, -1)
-        predicted_patches = []
-        for i in range(len(prediction)//4):
-            turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
 
-            prediction = np.sum(turned_pred, 0)
+            predictions = softmax(prediction, -1)
+            predicted_patches = []
+            for i in range(len(prediction)//4):
+                turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
 
-            predicted_patches.append(prediction)
-        predicted_patches = np.array(predicted_patches)
-        predicted_image, confidence = unpatchify(predicted_patches, shape, config, threshold=True, both=True)
-        mask = None
-        if kwargs["run"]["maskGrid"]:
-            
-            if "use_existing_mask" in kwargs["maskGrid"] and kwargs["maskGrid"]["use_existing_mask"]:
-                current_mask_path = mask_path / (Path(path).stem + "_mask.pickle")
-                if current_mask_path.exists():
-                    if current_mask_path.suffix == ".pickle":
-                        mask = mask_file.load(current_mask_path).create_mask()
-                    else:
-                        mask,_ = load_file(current_mask_path)
+                prediction = np.sum(turned_pred, 0)
+
+                predicted_patches.append(prediction)
+            predicted_patches = np.array(predicted_patches)
+            predicted_image, confidence = unpatchify(predicted_patches, shape, config, threshold=True, both=True)
+            mask = None
+            if kwargs["run"]["maskGrid"]:
+                
+                if "use_existing_mask" in kwargs["maskGrid"] and kwargs["maskGrid"]["use_existing_mask"]:
+                    current_mask_path = mask_path / (Path(path).stem + "_mask.pickle")
+                    if current_mask_path.exists():
+                        if current_mask_path.suffix == ".pickle":
+                            mask = mask_file.load(current_mask_path).create_mask()
+                        else:
+                            mask,_ = load_file(current_mask_path)
+                else:
+                    mask = find_grid_hole_per_file(path, **kwargs["maskGrid"])
+                if mask is not None:
+                    mask = resizeSegmentation(mask,predicted_image.shape).todense()
+
+            if kwargs["segmentation"]["filled_segmentation"]:
+                predicted_image = get_contour_of_filled_segmentation(predicted_image)
             else:
-                mask = find_grid_hole_per_file(path, **kwargs["maskGrid"])
-            if mask is not None:
-                mask = resizeSegmentation(mask,predicted_image.shape).todense()
+                if kwargs["segmentation"]["identify_instances"]:
+                    try:
+                        max_nodes = 30
+                        if "max_nodes" in kwargs["segmentation"]:
+                            max_nodes = kwargs["segmentation"]["max_nodes"]
+                        predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["general"]["use_only_closed"], name=path, max_membrane_thickness=10, connect_parts=kwargs["segmentation"]["combine_snippets"], max_nodes=max_nodes)
+                    except Exception as e:
+                        raise e
 
-        if kwargs["segmentation"]["filled_segmentation"]:
-            predicted_image = get_contour_of_filled_segmentation(predicted_image)
-        else:
-            if kwargs["segmentation"]["identify_instances"]:
-                try:
-                    max_nodes = 30
-                    if "max_nodes" in kwargs["segmentation"]:
-                        max_nodes = kwargs["segmentation"]["max_nodes"]
-                    predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["general"]["use_only_closed"], name=path, max_membrane_thickness=10, connect_parts=kwargs["segmentation"]["combine_snippets"], max_nodes=max_nodes)
-                except Exception as e:
-                    raise e
+            predicted_image = sparse.as_coo(predicted_image)
 
-        predicted_image = sparse.as_coo(predicted_image)
+            seg_path = dataset_path / (Path(path).stem + "_labels.npz")
+            sparse.save_npz(seg_path, predicted_image)
 
-        seg_path = dataset_path / (Path(path).stem + "_labels.npz")
-        sparse.save_npz(seg_path, predicted_image)
-
-        outputqueue.put((path, seg_path))
+            outputqueue.put((path, seg_path))
+    except Exception as e:
+        errorQueue.put(traceback.format_exc())
+        raise e
 
 
 if __name__ == "__main__":

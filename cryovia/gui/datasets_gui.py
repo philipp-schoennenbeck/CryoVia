@@ -1100,6 +1100,12 @@ class DatasetListWidget(QListWidget):
         self.healthCheck = {}
         self.datasets = {}
         self.datasetsWidgets = {}
+        self.currentThread  = None
+        self.worker = None
+        self.queue = None
+        self.stopEvent = None
+
+
         self.startWorker()
 
         self.loadDatasets()
@@ -1176,12 +1182,12 @@ class DatasetListWidget(QListWidget):
                 self.stopEvent.set()
                 MESSAGE("Waiting until analysis is done or thread is closed.")
             
-            # while self.currentThread.isRunning():
-            #     time.sleep(0.5)
+
 
 
     def finishedRunning(self):
-        pass
+        
+        self.currentThread = None
 
     def progressEmited(self, emit):
         global CURRENTLY_RUNNING, MESSAGE
@@ -1952,7 +1958,7 @@ class nJobsDialog(QDialog):
         super().__init__()
         self.setLayout(QGridLayout())
         self.setWindowTitle("Parallelization parameters")
-        self.njobsLabel = QLabel("# parallel jobs")
+        self.njobsLabel = QLabel("# parallel jobs per thread")
         self.threadsLabel = QLabel("# Threads")
         self.njobsLineedit = QLabelWithValidator("5", int, 5)
 
@@ -2071,6 +2077,7 @@ class runButtonWidget(QPushButton):
                 
                 thread.start()   
                 self.currentThread = thread
+                
                 self.worker = worker
                 self.queue = queue
                 self.stopEvent = stopEvent
@@ -2087,12 +2094,13 @@ class runButtonWidget(QPushButton):
                 self.stopEvent.set()
                 MESSAGE("Waiting until analysis is done or thread is closed.")
             
-            # while self.currentThread.isRunning():
-            #     time.sleep(0.5)
 
 
     def finishedRunning(self):
-        pass
+        self.worker = None
+        self.currentThread = None
+        self.queue = None
+        self.stopEvent = None
 
     def progressEmited(self, emit):
         global CURRENTLY_RUNNING, MESSAGE

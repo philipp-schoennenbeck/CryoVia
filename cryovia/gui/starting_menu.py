@@ -4,8 +4,8 @@ import pathlib
 import silence_tensorflow.auto
 
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QMainWindow, QToolButton, QMessageBox
-from PyQt5.QtCore import QSize
-from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import QSize, QTimer
+from PyQt5.QtGui import QCloseEvent, QPixmap, QIcon
 from PyQt5 import QtCore
 
 from traceback import format_exception
@@ -207,6 +207,13 @@ class CentralWidget(QWidget):
         self.layout().addWidget(self.train_shape_classifier_button)
         self.layout().addWidget(self.edge_detector_button)
 
+        self.to_check = {}
+        self.timer = QTimer()
+        self.runningTimer = runningTimer(self)
+        self.timer.timeout.connect(self.runningTimer.run_step)
+        self.timer.start(0)
+
+
 
     def open_drawer(self):
         """
@@ -254,8 +261,20 @@ class CentralWidget(QWidget):
         """
         Enables the opening of other windows when one window is closed.
         """
+
+        self.analyser_button.setEnabled(True)
+        self.train_cnn_button.setEnabled(True)
+        self.edge_detector_button.setEnabled(True)
+        self.train_shape_classifier_button.setEnabled(True)
         if self.current_window is not None:
+            if isinstance(self.current_window, DatasetGui):
+                self.analyser_button.setEnabled(False)
+                self.to_check["analyser"] = [self.current_window.datasetListWidget.listWidget, self.current_window.runButtonWidget]
+
+                
             self.current_window = None
+
+
         self.setEnabled(True)
             # self.change_button_clickability(True)
 
@@ -264,6 +283,31 @@ class CentralWidget(QWidget):
     #     self.analyser_button.setEnabled(clickable)
     #     self.train_cnn_button.setEnabled(clickable)
     #     self.train_shape_classifier_button.setEnabled(clickable)
+
+
+class runningTimer:
+    def __init__(self, parent):
+        self.parent:CentralWidget = parent
+
+    def run_step(self):
+        to_remove = []
+        for name, thread_check in self.parent.to_check.items():
+            enable = True
+            for thread in thread_check:
+                if thread.currentThread is not None:
+                    if thread.currentThread.isRunning():
+                        enable = False
+            
+            if name == "analyser":
+                self.parent.analyser_button.setEnabled(enable)
+            if enable:
+                to_remove.append(name)
+                self.parent.analyser_button.setToolTip("")
+            else:
+                self.parent.analyser_button.setToolTip("Waiting for threads to close.")
+        for remove in to_remove:
+            del self.parent.to_check[remove]
+
 
 
 class QStartingMenu(QMainWindow):
@@ -276,6 +320,26 @@ class QStartingMenu(QMainWindow):
 
         self.setCentralWidget(self.button_widget)
         self.setWindowTitle("CRYO-VIA")
+    
+    def closeEvent(self, a0: QCloseEvent) -> None:
+        self.setVisible(False)
+        printed = False
+        while True:
+
+            to_close = True
+            for name, thread_check in self.button_widget.to_check.items():
+                for thread in thread_check:
+                    if thread.currentThread is not None:
+                        if thread.currentThread.isRunning():
+                            to_close = False
+            QApplication.processEvents()
+            if to_close:
+                break
+            if not printed:
+                print("Waiting for the remaining threads to close.")
+                printed = True
+
+        return super().closeEvent(a0)
         
 
 class StringListParamType(click.ParamType):

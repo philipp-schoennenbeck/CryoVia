@@ -455,6 +455,9 @@ class Dataset:
             if stopEvent.is_set():
                 self.save()
                 return
+            if results is None:
+                self.save()
+                return
             for key, value in results.items():
                 self.segmentation_paths[key] = value
                 
@@ -494,6 +497,7 @@ class Dataset:
 
         input_queue = manager.Queue()
         output_queue =  manager.Queue()
+        error_queue = manager.Queue()
         # input_queue = Queue()
 
         if "CUDA_VISIBLE_DEVICES" in os.environ:
@@ -504,7 +508,7 @@ class Dataset:
         
 
         lock = manager.Lock()
-        analyser_proccesses = [mp.get_context(MP_START_METHOD).Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path]) for q in range(threads)]
+        analyser_proccesses = [mp.get_context(MP_START_METHOD).Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path, error_queue]) for q in range(threads)]
         [input_queue.put((micrograph, segmentation, analyser, rerun, run_kwargs, counter, self.dataset_path, shapeClassifier, csv, ps)) for counter, (micrograph, segmentation, analyser, csv, ps) in
                         enumerate(zip(self.micrograph_paths, segmentation_paths, analyser_paths, csvs, pixelSizes))]
         
@@ -560,6 +564,14 @@ class Dataset:
             del os.environ["CUDA_VISIBLE_DEVICES"]
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpus
+
+        foundErrors = any([process.exitcode > 0 for process in analyser_proccesses])
+        if foundErrors:
+            tqdm_file.write("Something went wrong during analysis. Following errors occurred:\n")
+            while not error_queue.empty():
+                tqdm_file.write(error_queue.get())
+                tqdm_file.write("\n")
+            return
         self.to_csv(njobs)
         now = datetime.now()
         self.times["Last run"] = now.strftime("%m/%d/%Y, %H:%M:%S")
@@ -951,10 +963,11 @@ class Dataset:
 def print_error(error):
     print(error, flush=True)
 
-def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path ):
+def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path, error_queue ):
     """
     Run the analysis, only called by the run method of datasets.
     """
+    test_counter = 0
     try:
         with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             while True:
@@ -972,6 +985,8 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                     
                     times = {}
                     now = datetime.now()
+
+
                     if analyser is not None and not rerun:
                         if kwargs["general"]["only_run_for_new_data"]:
                             
@@ -1091,13 +1106,14 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                     outputqueue.put((micrograph, path, analyser.segmentation_path, times))
                         
                 except Exception as e:
+                    raise e
                     print("error in while loop")
                     print(traceback.format_exc())
                     outputqueue.put((None, traceback.format_exc(), None, None))
                     continue
-    except Exception:
-        print("Whole process error")
-        print(traceback.format_exc())
+    except Exception as e:
+        error_queue.put(traceback.format_exc())
+        raise e
     
 
 if __name__ == "__main__":
