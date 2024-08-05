@@ -24,7 +24,7 @@ import os
 import shutil
 import traceback
 from cryovia.gui.segmentation_files.segmentation_model import *
-from cryovia.gui.napari_seg_helper import SegmentationHelper
+
 # from cryovia.gui.napari_plugin import SegmentationHelper
 import pyqtgraph as pyqtg
 import multiprocessing
@@ -1262,7 +1262,7 @@ class TrainWidget(QWidget):
                 files = []
             
             if item is not None:
-            
+                from cryovia.gui.napari_seg_helper import SegmentationHelper
                 m:segmentationModel = item.segModel
                 window.add_dock_widget(SegmentationHelper(viewer, files=files, custom_parent=self, segmentation_model=m,default_pixel_size=pixel_size)) #"cryovia Segmentation Helper"
             else:
