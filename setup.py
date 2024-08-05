@@ -32,7 +32,7 @@ setup(
         'opencv-python',
         # 'sknw==0.13',
         'napari[all]==0.4.19',
-        'matplotlib==3.9.1',
+        'matplotlib==3.8.3',
         "pandas",
         "pyqtgraph",
         "qimage2ndarray",
