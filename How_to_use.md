@@ -12,6 +12,8 @@ See [README](README.md)
  [&nbsp; &nbsp; 1.2 Membrane analyser](#membrane-analyser)
  
  [&nbsp; &nbsp; 1.3 Neural network](#neural-network)
+ 
+ [&nbsp; &nbsp;&nbsp;&nbsp; 1.3.1 Napari window](#napari-window)
 
 [&nbsp; &nbsp; 1.4 Shape classifier](#shape-classifier)
 
@@ -63,7 +65,7 @@ You will see the starting menu of CryoVia:
 7. New: Opens up a file explorer to selected where the new dataset will be saved and then creates a new dataset.
 8. Copy: Create a copy of the currently selected dataset. All needed data will be copied. Can take some time for large datasets.
 9. Remove: Removes the currently selected dataset with all its data. Cannot be reveresed.
-10. Inspect: Opens a new window where the micrographs and their corresponding segmentation can be viewed. In this window individual membranes or micrographs can be removed from the dataset. See TODO
+10. Inspect: Opens a new window where the micrographs and their corresponding segmentation can be viewed. In this window individual membranes or micrographs can be removed from the dataset. (See [2.3 Micrograph inspection](#micrograph-inspection)) 
 11. Data >>: Loads the data into the table view to analyse the data. Multiple different datasets can be loaded in at the same time to compare the results.
 12. Filters: Here you can create filters to apply to the current loaded datasets. See image for an example. All numerical values are given in Å or 1/Å.
 13. Apply: Applies the filters to the currently seen dataset data.
@@ -91,13 +93,22 @@ You will see the starting menu of CryoVia:
 2. Processing parameters: You can set the number of usable parallel cores and which GPU to use during training and predicting.
 3. Add training data: Adds training data to the currently selected model. Training data is micrograph and its segmentation. Opens two file explorers. In the first you have to select micrographs and in the second the corresponding segmentations. It should be the same amount of files. Both lists of files will be alphabetically sorted and each micrograph gets its segmentation. 
 4. Clear training data: Removes all training data from the currently selected model.
-5. Open napari: Opens napari to manually segment micrographs for the currently selected model. See TODO
+5. Open napari: Opens napari to manually segment micrographs for the currently selected model. (See  [1.3.1 Napari window](#napari-window)) 
 6. TRAIN: Trains the currently selected model with all given training data and parameters.
 7. Run active learning: Opens a file explorer to select micrographs. The currently selected model will predict the segmentation of the micrographs. The most unsure predicted micrographs will be selected and opened in napari for manual segmentation. The number of selected unsure micrographs can be set above.
 8. Predict images: Opens a file explorer to select micrographs to predict with the currently selected model. Can be saved as various file formats. Identify instances can be set to solve overlapping membranes. Save intermediate files will not only save the last prediction but also some intermediate files.
 9. All the parameters for the currently selected model. If a new model is created all parameters can be set. Once the model has been trained some of the parameters are locked in.
 10. Training loss: The graph of validation loss and normal loss during training. All training cycles are shown as a contiuous graph.
 11. Message board: CryoVia will print some information here during training and loading of data.
+### Napari window
+![Napari window](example_screenshots/napari_window_a.png "Napari window")
+The segmentation helper loads in micrographs and creates a segmentation image where you can manually add segmentations. Each individual membrane/vesicle will be on a single slice of a segmentation stack. A new slice can be created by pressing the "Next membrane" button (or pressing w) while on the last slice. The plugin also checks if there are multiple connected components on a slice and will split them into multiple slices.
+1. Load files: Choose files to load into this napari plugin. This plugin only works when you load in the files this way. The first file will be loaded in. Switching to the previous/next files can be done with the buttons or a/d.
+2. Choose save directory: Choose where the finished segmentations will be saved.
+3. Previous/Next membrane: Go to the previous/next slice for an individual membrane/vesicle. If you are on the last slice and press "next membrane" a new slice will be created.
+4. Previous/Next file: Go to the previous/next file you previously loaded in.
+5. Low/High pass filter: Applies the filter with the filter size in the field below to the current micrograph.
+
 
 ### Shape classifier
 
@@ -171,13 +182,13 @@ After running the segmentation and analysis you can look at the results.
 ![Example dataset results](example_screenshots/data_analysis_a.png "Example dataset results")
 
 1. Select the dataset we just ran the analysis on.
-2. You can look at the segmentation results for each micrograph and remove unwanted micrographs or membranes. These results are already cleaned. So only completely segmented vesicles are beeing used. (See TODO)
+2. You can look at the segmentation results for each micrograph and remove unwanted micrographs or membranes. These results are already cleaned. So only completely segmented vesicles are beeing used. (See [2.3 Micrograph inspection](#micrograph-inspection))
 3. To load in the results for the whole dataset click "Data >>" and it will load in the data about each vesicle into to table view in the middle.
 4. In this table view every row represents a vesicle and the columns indicate their attributes. You can remove incorrectly segmented membranes with the ```del``` key. If you click on any column it will show you the results for the whole dataset in the graph at 9. You can also display all loaded in datasets by clicking "Show all".
 5. You can filter the table in 4 by creating filters here.
 6. After creating filter you have to apply these to the table view.
 7. You can export the table as a csv file.
-8. You can also have an overview of all membranes currently in the table. This will show each vesicle and its segmentation in a separate window. You can also delete membranes from the dataset in this window by selecting objects and pressing ```del```. See TODO
+8. You can also have an overview of all membranes currently in the table. This will show each vesicle and its segmentation in a separate window. You can also delete membranes from the dataset in this window by selecting objects and pressing ```del```. (See [2.4 Vesicle inspection](#vesicle-inspection)) 
 9. Here you will see graphs for the selected attributes for the whole dataset(s).
 10. Here you will see individual information about the currently selected vesicle in the table.
 
