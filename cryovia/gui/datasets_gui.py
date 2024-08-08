@@ -694,16 +694,21 @@ class DatasetTabsWidget(QTabWidget):
             return
         # data:pd.Series = data.iloc[row]
         dataset_row = tableview.model()._data.filter(idx, axis=0)
-        wrapper = get_analyser(dataset_row, dataset)
+        try:
+            wrapper = get_analyser(dataset_row, dataset)
+            min_thickness = tableview.model()._data["Min thickness"].min(skipna=True)
+            max_thickness = tableview.model()._data["Max thickness"].max(skipna=True)
+            min_curvature = tableview.model()._data["Min curvature"].min(skipna=True)
+            max_curvature = tableview.model()._data["Max curvature"].max(skipna=True)
+
+            self.mainWindow().membraneWidget.loadImages(wrapper, dataset_row["Index"].iloc[0], min_thickness, max_thickness, min_curvature, max_curvature)
+        except FileNotFoundError as e:
+            self.mainWindow().membraneWidget.loadImages(None, None,None, None, None, None)
+
 
         
         
-        min_thickness = tableview.model()._data["Min thickness"].min(skipna=True)
-        max_thickness = tableview.model()._data["Max thickness"].max(skipna=True)
-        min_curvature = tableview.model()._data["Min curvature"].min(skipna=True)
-        max_curvature = tableview.model()._data["Max curvature"].max(skipna=True)
-
-        self.mainWindow().membraneWidget.loadImages(wrapper, dataset_row["Index"].iloc[0], min_thickness, max_thickness, min_curvature, max_curvature)
+        
         column = data.columns[column]
 
         get_all = self.mainWindow().graphWidget.membraneGraphs.showAllCheckbox.isChecked()
@@ -1515,7 +1520,7 @@ class DatasetButtonWidget(QWidget):
             if running(dataset.name):
                 MESSAGE("Cannot copy dataset because analysis is currently running\n")
                 return
-            dataset.copy(save_dir)
+            dataset.copy(save_dir, print_func=lambda x: MESSAGE(x, True))
             self.parent().listWidget.loadDatasets()
 
     def createNewDatset(self):
@@ -2459,23 +2464,16 @@ class thumbnailWidget(QFrame):
         self.imageLabel.adjustSize()
         self.maskLabel.adjustSize()
         self.setLayout(QGridLayout())
-        # self.imageLabel.setStyleSheet("border: 1px solid black")
-        # self.maskLabel.setStyleSheet("border: 1px solid black")
 
-        # self.placeholder = QWidget()
-        # self.placeholder_2 = QWidget()
-        # self.placeholder_3 = QWidget()
-        # self.placeholder_4 = QWidget()
+
+
         
         
         self.layout().addWidget(self.imageLabel,0,0,alignment=Qt.AlignCenter)
         
         
         self.layout().addWidget(self.maskLabel,0,2,alignment=Qt.AlignCenter)
-        # self.layout().addWidget(self.placeholder,0,1)
-        # self.layout().addWidget(self.placeholder_2, 1,0)
-        # self.layout().addWidget(self.placeholder_3, 1,2)
-        # self.layout().addWidget(self.placeholder_4, 2,1)
+
 
         self.layout().addWidget(self.thicknessContourGraph, 2,0)
         self.layout().addWidget(self.thicknessProfileGraph, 2,2)
@@ -2500,6 +2498,12 @@ class thumbnailWidget(QFrame):
 
     def loadImages(self, wrapper:AnalyserWrapper, idx:int, min_thickness, max_thickness, min_curvature, max_curvature):
         self.clearAll()
+        if wrapper is None:
+            self.imageLabel.setText("File not found")
+            self.maskLabel.setText("File not found")
+            self.imagePixmap = None
+            self.maskPixmap = None
+            return
         self.setToolTip(str(wrapper.directory) + f"\nIndex: {str(idx)}")
         tn, seg = wrapper.get_thumbnails([idx])
         tn = tn[idx]
@@ -2509,9 +2513,14 @@ class thumbnailWidget(QFrame):
         seg = np.array(seg)
         image = q2n.gray2qimage(tn)
        
+        shape = self.shape
+
+        if min(self.width(), self.height()) / 2 - 40 > self.shape:
+            shape = min(self.width(), self.height()) / 2 - 40
+
         scaled = image.scaled(
-            self.shape,
-            self.shape,
+            shape,
+            shape,
             aspectRatioMode=Qt.KeepAspectRatio, 
             transformMode=Qt.TransformationMode.SmoothTransformation
         )
@@ -2523,8 +2532,8 @@ class thumbnailWidget(QFrame):
         seg = q2n.gray2qimage(seg)
 
         scaled = seg.scaled(
-            self.shape,
-            self.shape,
+            shape,
+            shape,
             aspectRatioMode=Qt.KeepAspectRatio,
         )
         self.maskPixmap = QPixmap.fromImage(scaled)
@@ -2560,28 +2569,62 @@ class thumbnailWidget(QFrame):
             self.thicknessProfileGraph.draw()
     
     def clearAll(self):
-        self.imagePixmap.fill(QColor("white"))
-        self.maskPixmap.fill(QColor("white"))
-        self.imageLabel.setPixmap(self.imagePixmap)
-        self.maskLabel.setPixmap(self.maskPixmap)
+        if self.imagePixmap is not None:
+            self.imagePixmap.fill(QColor("white"))
+            self.maskPixmap.fill(QColor("white"))
+            self.imageLabel.setPixmap(self.imagePixmap)
+            self.maskLabel.setPixmap(self.maskPixmap)
 
         self.thicknessContourGraph.axes.cla()
         self.thicknessProfileGraph.axes.cla()
 
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        if self.imagePixmap is not None:
+            shape = self.shape
 
+            if min(self.width(), self.height()) / 2 - 40 > self.shape:
+                shape = min(self.width(), self.height()) / 2 - 40
+
+            scaled = self.imagePixmap.scaled(
+                shape,
+                shape,
+                aspectRatioMode=Qt.KeepAspectRatio, 
+                transformMode=Qt.TransformationMode.SmoothTransformation
+            )
+            self.imagePixmap = scaled
+            self.imageLabel.setPixmap(self.imagePixmap)
+
+            
+            
+
+            scaled = self.maskPixmap.scaled(
+                shape,
+                shape,
+                aspectRatioMode=Qt.KeepAspectRatio,
+            )
+            self.maskPixmap = scaled
+            self.maskLabel.setPixmap(self.maskPixmap)
+
+
+        return super().resizeEvent(a0)
 
 class ImageData:
     def __init__(self, row, dataset, index=None):
-        wrapper = get_analyser(row, dataset)
-        idx = row["Index"]
-        tn, seg = wrapper.get_thumbnails([idx])
-        self.index = index
-        
         try:
-            self.image = q2n.gray2qimage(np.array(tn[idx]))
-            self.mask = q2n.gray2qimage(np.array(seg[idx]))
-        except KeyError as e:
-            raise e
+            wrapper = get_analyser(row, dataset)
+            idx = row["Index"]
+            tn, seg = wrapper.get_thumbnails([idx])
+            self.index = index
+            
+            try:
+                self.image = q2n.gray2qimage(np.array(tn[idx]))
+                self.mask = q2n.gray2qimage(np.array(seg[idx]))
+            except KeyError as e:
+                raise e
+        except FileNotFoundError:
+            self.index = row["Index"]
+            self.image = None
+            self.mask = None
 
 
 def getMicrographDataMP(micrograph, segmentation, indeces=None):
@@ -2914,26 +2957,33 @@ class PreviewDelegate(QStyledItemDelegate):
 
         # option.rect holds the area we are painting on the widget (our table cell)
         # scale our pixmap to fit
-        scaled = data.image.scaled(
-            width,
-            height,
-            aspectRatioMode=Qt.KeepAspectRatio,
-            transformMode=Qt.TransformationMode.SmoothTransformation
-        )
+        if data.image is None:
+            # painter.setBrush(QColor(200, 200, 255))  # Set the fill color
+            painter.setPen(QColor(0, 0, 0))  # Set the text color
+            painter.setFont(QFont('Arial', 10))  # Set the font
+            painter.drawText(option.rect, Qt.AlignCenter, "File not found")
+            
+        else:
         # Position in the middle of the area.
-        x = int(CELL_PADDING + (width - scaled.width()) / 2)
-        y = int(CELL_PADDING + (height - scaled.height()) / 2)
+            scaled = data.image.scaled(
+                    width,
+                    height,
+                    aspectRatioMode=Qt.KeepAspectRatio,
+                    transformMode=Qt.TransformationMode.SmoothTransformation
+                )
+            x = int(CELL_PADDING + (width - scaled.width()) / 2)
+            y = int(CELL_PADDING + (height - scaled.height()) / 2)
 
 
 
-        painter.drawImage(option.rect.x() + x, option.rect.y() + y, scaled)
+            painter.drawImage(option.rect.x() + x, option.rect.y() + y, scaled)
 
-        
-        scaled_mask = data.mask.scaled(width, height, aspectRatioMode=Qt.KeepAspectRatio)
-        
-        painter.drawImage(option.rect.x() + x + scaled.width(), option.rect.y() + y, scaled_mask)
-        if hasattr(data, "segmentation"):
-            QToolTip.showText(option.rect.center(), data.segmentation, self.parent())
+            
+            scaled_mask = data.mask.scaled(width, height, aspectRatioMode=Qt.KeepAspectRatio)
+            
+            painter.drawImage(option.rect.x() + x + scaled.width(), option.rect.y() + y, scaled_mask)
+            if hasattr(data, "segmentation"):
+                QToolTip.showText(option.rect.center(), data.segmentation, self.parent())
         # painter.restore()
     def sizeHint(self, option, index):
         # All items the same size.
@@ -3105,9 +3155,9 @@ class MicrographInspectionWindow(QWidget):
         self.fillButton = QCheckBox("Fill vesicles")
         self.fillButton.clicked.connect(self.fill)
         self.biggerButton = QPushButton("-")
-        self.biggerButton.clicked.connect(lambda: self.changeImageSize(1))
+        self.biggerButton.clicked.connect(lambda: self.changeImageSize(-1))
         self.smallerButton = QPushButton("+")
-        self.smallerButton.clicked.connect(lambda: self.changeImageSize(-1))
+        self.smallerButton.clicked.connect(lambda: self.changeImageSize(1))
 
         self.nextMembraneButton = QPushButton(">")
         self.nextMembraneButton.setToolTip("Select next membrane")
@@ -3149,8 +3199,9 @@ class MicrographInspectionWindow(QWidget):
         self.buttonLayout.addWidget(self.shapeLabel)
         self.buttonLayout.addLayout(self.indexLayout)
 
-        self.buttonLayout.addWidget(self.nextMembraneButton)
         self.buttonLayout.addWidget(self.previousMembraneButton)
+        self.buttonLayout.addWidget(self.nextMembraneButton)
+        
         self.buttonLayout.addWidget(self.removeMicrographButton)
         self.buttonLayout.addWidget(self.removeMembraneButton)
         
@@ -3282,9 +3333,9 @@ class MicrographInspectionWindow(QWidget):
         modifiers = QApplication.keyboardModifiers()
         if modifiers == QtCore.Qt.ControlModifier:
             if a0.angleDelta().y() > 0:
-                self.scrollCounter -= 1
-            elif a0.angleDelta().y() < 0:
                 self.scrollCounter += 1
+            elif a0.angleDelta().y() < 0:
+                self.scrollCounter -= 1
             multiplier = 1
             # if abs(self.scrollCounter) % 10 > 0:
             #     multiplier = abs(self.scrollCounter) % 10 +1
@@ -3545,9 +3596,9 @@ class InspectionWindow(QWidget):
         modifiers = QApplication.keyboardModifiers()
         if modifiers == QtCore.Qt.ControlModifier:
             if a0.angleDelta().y() > 0:
-                self.scrollCounter -= 1
-            elif a0.angleDelta().y() < 0:
                 self.scrollCounter += 1
+            elif a0.angleDelta().y() < 0:
+                self.scrollCounter -= 1
             
             self.scroll_timer.start()
             a0.accept()
@@ -3625,7 +3676,7 @@ class MicrographInspectionButton(QPushButton):
         
 
     def mainWindow(self):
-        return self.parent().parent().parent().parent().parent()
+        return self.parent().parent().parent().parent().parent().parent()
     
     def openInspectionWindow(self):
         global MESSAGE
@@ -3638,16 +3689,18 @@ class MicrographInspectionButton(QPushButton):
                 if dataset.isZipped:
                     MESSAGE(f"Cannot inspect dataset {dataset.name} because it is still zipped.")
                     return
-           
+                self.mainWindow().setEnabled(False)
+                QApplication.processEvents()
+
                 self.InspectionWindow = MicrographInspectionWindow(dataset,self )
-                self.parent().parent().setEnabled(False)
+                
                 self.InspectionWindow.show()
         
         
 
     def inspectClosed(self):
         self.InspectionWindow = None
-        self.parent().parent().setEnabled(True)
+        self.mainWindow().setEnabled(True)
         
 
 
@@ -3669,15 +3722,17 @@ class InspectionButton(QPushButton):
             if tab is None:
                 return
             shown_data = tab.model().shown_data
+            self.mainWindow().setEnabled(False)
+            QApplication.processEvents()
             self.InspectionWindow = InspectionWindow(shown_data, tab.model().dataset, tab, parent=self)
-            self.parent().setEnabled(False)
+            
             self.InspectionWindow.show()
         
         
 
     def inspectClosed(self):
         self.InspectionWindow = None
-        self.parent().setEnabled(True)
+        self.mainWindow().setEnabled(True)
         
 
 
@@ -3897,6 +3952,14 @@ class DatasetGui(QWidget):
         self.messageBoard.moveCursor(QTextCursor.End)
         if update:
             QApplication.processEvents()
+
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+
+        
+
+
+        return super().resizeEvent(a0)
 
 if __name__ == "__main__":
 

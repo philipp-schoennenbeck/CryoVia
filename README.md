@@ -69,7 +69,7 @@ For usage see [Usage](How_to_use.md)
 
 ```pip install tensorflow==2.10```
 
-```pip install numpy==1.21.6```
+```pip install numpy==1.24.1```
 
 ### Verifying tensorflow install
 

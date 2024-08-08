@@ -853,7 +853,7 @@ class Dataset:
         return self.path / self.name
 
 
-    def copy(self, save_dir:Path):
+    def copy(self, save_dir:Path, print_func=None):
         """
         Create a copy of this dataset and all its data
         Parameters
@@ -871,7 +871,7 @@ class Dataset:
         name_counter = 1
         while True:
             new_name = f"{name}_{name_counter}"
-            if new_name not in all_names:
+            if new_name not in all_names and not (Path(save_dir) / new_name).exists():
                 break
             name_counter += 1
        
@@ -879,6 +879,8 @@ class Dataset:
         # save_dir = save_dir / new_name
         # save_dir.mkdir(parents=True, exist_ok=True)
         new_dataset = Dataset(new_name, save_dir)
+        counter = 1
+
         for m in self.micrograph_paths:
             new_dataset.addMicrographPaths([m])
 
@@ -897,6 +899,9 @@ class Dataset:
                 new_seg_path = new_dataset.dataset_path / Path(self.segmentation_paths[m]).name
                 shutil.copy(self.segmentation_paths[m], new_seg_path)
                 new_dataset.segmentation_paths[m] = new_seg_path
+            if print_func is not None and (counter % 10 == 0 or counter == len(self.micrograph_paths)):
+                print_func(f"Copying {self.name}: {counter}/{len(self.micrograph_paths)} files\n")
+            counter += 1
         
         new_dataset.to_csv()
         new_dataset.save()
