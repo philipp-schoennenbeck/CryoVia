@@ -1056,7 +1056,7 @@ class Analyser:
             pool (multiprocessing.Pool, optional): A pool of worker processes for 
                 parallel computation. If None, the computation will be done 
                 sequentially. Defaults to None.
-        Returns
+        Returns0
         all_curavtures (dict) : Dictionary of all the curavture values with membrane indexes as keys
         """
         if os.environ["CRYOVIA_MODE"] == "1":
@@ -1421,8 +1421,10 @@ class Analyser:
                 membrane.shape = "not circular"
                 membrane.shape_probability = 1
             else:
-                curv = membrane.resize_curvature(200,100)
                 
+
+                curv = membrane.resize_curvature(200,100)
+
                 if curv is None or len(curv) == 0:
                     continue
 

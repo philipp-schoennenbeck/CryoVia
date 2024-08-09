@@ -36,7 +36,7 @@ from cryovia.gui.path_variables import DATASET_PATH
 if os.name == 'nt':
     MP_START_METHOD = "spawn"
 else:
-    MP_START_METHOD = "fork"
+    MP_START_METHOD = "spawn"
 
 
 
@@ -477,10 +477,6 @@ class Dataset:
         segmentation_paths = [self.segmentation_paths[micrograph] if micrograph in self.segmentation_paths else None for micrograph in self.micrograph_paths]
         analyser_paths = [self.analysers[micrograph] if micrograph in self.analysers and Path(self.analysers[micrograph]).exists() else None for micrograph in self.micrograph_paths ]
         
-        # output_queue = Queue(10)
-
-        # for mg, an in zip(self.micrograph_paths, analyser_paths):
-        #     print(mg, an)
 
         if use_csv:
             csv = self.csv
@@ -513,7 +509,6 @@ class Dataset:
                         enumerate(zip(self.micrograph_paths, segmentation_paths, analyser_paths, csvs, pixelSizes))]
         
         [p.start() for p in analyser_proccesses]
-
         
             # with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             
@@ -544,7 +539,6 @@ class Dataset:
 
                 if micrograph is None:
                     continue
-                # print(micrograph, path)
             
                 if path is None:
                     empty_micrographs.append(micrograph)
@@ -559,13 +553,14 @@ class Dataset:
                 self.segmentation_paths[micrograph] = seg_path
                 analysers.append(path)
                 self.save()
-        # print(time_used)
         if visible_gpus is None:
             del os.environ["CUDA_VISIBLE_DEVICES"]
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpus
 
         foundErrors = any([process.exitcode > 0 for process in analyser_proccesses])
+
+
         if foundErrors:
             tqdm_file.write("Something went wrong during analysis. Following errors occurred:\n")
             while not error_queue.empty():
@@ -1112,8 +1107,7 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path,
                         
                 except Exception as e:
                     raise e
-                    print("error in while loop")
-                    print(traceback.format_exc())
+
                     outputqueue.put((None, traceback.format_exc(), None, None))
                     continue
     except Exception as e:

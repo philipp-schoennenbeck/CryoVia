@@ -10,7 +10,7 @@ Requires-Dist: mrcfile
 Requires-Dist: scipy
 Requires-Dist: opencv-python
 Requires-Dist: napari[all]==0.4.19
-Requires-Dist: matplotlib
+Requires-Dist: matplotlib==3.8.3
 Requires-Dist: pandas
 Requires-Dist: pyqtgraph
 Requires-Dist: qimage2ndarray
