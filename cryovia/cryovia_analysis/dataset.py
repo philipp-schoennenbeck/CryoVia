@@ -1112,8 +1112,7 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path,
                         
                 except Exception as e:
                     raise e
-                    print("error in while loop")
-                    print(traceback.format_exc())
+
                     outputqueue.put((None, traceback.format_exc(), None, None))
                     continue
     except Exception as e:
