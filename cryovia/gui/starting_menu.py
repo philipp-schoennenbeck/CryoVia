@@ -319,7 +319,10 @@ class QStartingMenu(QMainWindow):
 
 
         self.setCentralWidget(self.button_widget)
-        self.setWindowTitle("CRYO-VIA")
+        if int(os.environ["CRYOVIA_MODE"])  > 0:
+            self.setWindowTitle("CRYO-VIA DEBUG")
+        else:
+            self.setWindowTitle("CRYO-VIA")
     
     def closeEvent(self, a0: QCloseEvent) -> None:
         self.setVisible(False)
