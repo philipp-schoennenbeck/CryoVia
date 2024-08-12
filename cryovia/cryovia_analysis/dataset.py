@@ -57,7 +57,7 @@ DEFAULT_CONFIGS = OrderedDict([
         ("only_segmentation", False),
         ("combine_snippets", False),
         ("max_nodes", 30)
-])),
+    ])),
     ("maskGrid", OrderedDict([
         ("use_existing_mask", False),
         ("to_size",100),
@@ -79,10 +79,16 @@ DEFAULT_CONFIGS = OrderedDict([
         ("min_thickness",20.0),
         ("max_thickness",70.0),
         ("sigma",2)
-])),
+    ])),
 
     ("estimateCurvature",OrderedDict([
-         ("max_neighbour_dist",300.0)
+         ("max_neighbour_dist",300.0),
+         ("adaptive", False),
+         ("max_distance", 1500),
+         ("min_distance", 35),
+         ("threshold", 2),
+         ("step",100)
+
 ])),
 
     ("shapePrediction",OrderedDict([

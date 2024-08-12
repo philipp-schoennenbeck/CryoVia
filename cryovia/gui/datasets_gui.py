@@ -1859,8 +1859,33 @@ class ConfigWidget(QDialog):
             button = self.add_button(key)
             self.buttons[key] = button
 
+
+    
+
     def createAllParameters(self):
         global DEFAULT_CONFIGS
+        def getDisableAllBut(func, checkbox:QCheckBox, but, own_name, disable=True):
+            def disableAllBut():
+                for current_name, current_lineedit in self.configs[func].items():
+                    current_lineedit:QLineEdit
+                    if current_name == own_name:
+                        current_lineedit.setEnabled(True)
+                        continue
+                    if current_name not in but :
+                        if disable:
+                            current_lineedit.setEnabled(not checkbox.isChecked())
+                        else:
+                            current_lineedit.setEnabled(checkbox.isChecked())
+                    else:
+                        if disable:
+                            current_lineedit.setEnabled(checkbox.isChecked())
+                        else:
+                            current_lineedit.setEnabled(not checkbox.isChecked())
+            return disableAllBut
+
+
+
+
         def addParameter(shown_name, name, func):
             if hasattr(DEFAULT_CONFIGS[func][name], "__call__"):
                 lineedit = QComboBox()
@@ -1873,7 +1898,18 @@ class ConfigWidget(QDialog):
                 elif "Default_NN" in items:
                     lineedit.setCurrentText("Default_NN")
             elif isinstance(DEFAULT_CONFIGS[func][name], bool):
+                print(shown_name, func, DEFAULT_CONFIGS[func][name])
+                
+
                 lineedit = QCheckBox()
+                if shown_name == "Use manual mask" and func == "maskGrid":
+                    f = getDisableAllBut(func, lineedit,set(), name )
+                    lineedit.clicked.connect(f)
+                    runAtTheEnd.append(f)
+                elif shown_name == "Use adaptive algorithm" and func == "estimateCurvature":
+                    f = getDisableAllBut(func, lineedit, set(["min_distance", "max_distance", "threshold", "step",]), name)
+                    lineedit.clicked.connect(f)
+                    runAtTheEnd.append(f)
                 # b = DEFAULT_CONFIGS[func][name]
                 lineedit.setChecked(self.previous_configs[func][name])
             else:
@@ -1883,13 +1919,17 @@ class ConfigWidget(QDialog):
             self.add_label_lineedit(label, lineedit, func)
 
             self.configs[func][name] = lineedit
-
+        runAtTheEnd = []
         addParameter("Max neighbour distance [Å]", "max_neighbour_dist", "estimateThickness")
         addParameter("Min Thickness [Å]", "min_thickness", "estimateThickness")
         addParameter("Max Thickness [Å]", "max_thickness", "estimateThickness")
         addParameter("Smoothing sigma", "sigma", "estimateThickness")
         addParameter("Max neighbour distance [Å]", "max_neighbour_dist", "estimateCurvature")
-        # addParameter("STD Threshold","std_threshold", "identifyIceContamination")
+        addParameter("Use adaptive algorithm", "adaptive", "estimateCurvature")
+        addParameter("Min distance", "min_distance", "estimateCurvature")
+        addParameter("Max distance", "max_distance", "estimateCurvature")
+        addParameter("Threshold", "threshold", "estimateCurvature")
+        addParameter("Step size", "step", "estimateCurvature")
         addParameter("Only used closed", "use_only_closed", "general")
         addParameter("Rerun", "rerun", "general")
         addParameter("Step size [Å]", "step_size", "general")
@@ -1899,7 +1939,6 @@ class ConfigWidget(QDialog):
         addParameter("Combine snippets (experimental)", "combine_snippets", "segmentation")
         addParameter("Identify instances", "identify_instances", "segmentation")
         addParameter("Max nodes", "max_nodes", "segmentation")
-        # addParameter("Remove metal grid", "remove_metal_grid", "segmentation")
         addParameter("Segmentation model", "segmentation_model", "segmentation")
         addParameter("Shape classifier", "shape_classifier", "shapePrediction")
         addParameter("Only run for new data", "only_run_for_new_data", "general")
@@ -1918,7 +1957,8 @@ class ConfigWidget(QDialog):
         addParameter("Use manual mask","use_existing_mask", "maskGrid")
         addParameter("Distance","distance", "maskGrid")
         addParameter("Cropping [Å]", "crop", "maskGrid")
-
+        for f in runAtTheEnd:
+            f()
 
 
     def add_button(self, title):

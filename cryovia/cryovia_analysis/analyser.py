@@ -679,7 +679,7 @@ class Analyser:
 
 
 
-    def estimateCurvatureAdaptive(self):
+    def estimateCurvatureAdaptive(self, max_distance=1500, min_distance=35, gaussian_filter_size=9, threshold=2, step=100):
 
 
         from circle_fit import hyperLSQ
@@ -861,15 +861,12 @@ class Analyser:
             s = sigma(x, y, xc, yc, r)
             return xc, yc, r, s
 
+        max_distance = int(max_distance)
+        min_distance = int(min_distance)
+        step = int(step)
 
-
-
-
-        max_distance = int(1500/7)
-        min_distance = 5
-        gaussian_filter_size = 9
-        threshold = 2
-        current_min_distances = np.arange(min_distance,max_distance, step=15)
+        current_min_distances = np.arange(min_distance,max_distance, step=step)
+        print(current_min_distances)
 
         membrane_curvatures = {}
         for membrane in self.membranes:
@@ -890,11 +887,7 @@ class Analyser:
 
             
             membrane.find_close_points(max_distance=max_distance, estimate_new_vectors=False)
-
-            neighbourhood_pts = [np.array(p.get_coords_of_neighbourhood(min_distance)).T for p in membrane.points(n=1)]
-
-
-            
+         
             
             
             current = []
@@ -907,7 +900,7 @@ class Analyser:
                 polygonimage = cv2.fillPoly(polygonimage, [coords], 1)
 
                 
-            for point_counter, (p, n_pts) in enumerate(zip(membrane.points(n=1), neighbourhood_pts)):          
+            for point_counter, p in enumerate(membrane.points(n=1)):          
                 
                 neighbourhood = p.neighbourhood_points
 
@@ -1038,7 +1031,7 @@ class Analyser:
 
 
 
-    def estimateCurvature(self, favor_positive_curvature=True, max_neighbour_dist=200, gaussian_filter_size=9, pool=None):
+    def estimateCurvature(self, favor_positive_curvature=True, max_neighbour_dist=200, gaussian_filter_size=9, pool=None, max_distance=1500, min_distance=35, threshold=2, step=100, adaptive=False):
         """
         Estimates the curvature of elements in a dataset.
 
@@ -1059,8 +1052,8 @@ class Analyser:
         Returns0
         all_curavtures (dict) : Dictionary of all the curavture values with membrane indexes as keys
         """
-        if os.environ["CRYOVIA_MODE"] == "1":
-            return self.estimateCurvatureAdaptive()
+        if adaptive:
+            return self.estimateCurvatureAdaptive(max_distance, min_distance, gaussian_filter_size, threshold, step)
        
         def matlab_style_gauss(size=21,sigma=10):
             """
