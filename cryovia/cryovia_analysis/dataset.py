@@ -78,7 +78,8 @@ DEFAULT_CONFIGS = OrderedDict([
         ("max_neighbour_dist",300.0),
         ("min_thickness",20.0),
         ("max_thickness",70.0),
-        ("sigma",2)
+        ("sigma",2),
+        ("smooth_contour", False)
     ])),
 
     ("estimateCurvature",OrderedDict([
@@ -107,7 +108,6 @@ DEFAULT_CONFIGS = OrderedDict([
 ])
 
 
-# DATASET_PATH = Path().home() / ".cryovia" / "DATASETS"
 
 def logical_process(pipe, device="GPU"):
     import tensorflow as tf

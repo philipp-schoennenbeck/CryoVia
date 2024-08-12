@@ -13,6 +13,8 @@ from scipy.ndimage import gaussian_filter
 from skimage.draw import disk
 import copy
 from matplotlib.cm import get_cmap
+from scipy.signal import savgol_filter
+
 
 
 class Membrane(dict):
@@ -882,12 +884,24 @@ class Membrane(dict):
         return len(self.is_enclosed_in)
 
     
-    def getResizedCoords(self, ratio):
+    def getResizedCoords(self, ratio, pixelSize=None, smoothContour=False):
+        def smooth(x, wl, method="interp"):
+            return savgol_filter(x, min(len(x), wl),3,mode=method)
         coords = self.coords
 
         coords = coords * ratio
 
         y,x = coords.T
+        if pixelSize is None:
+            pixelSize = self.analyser.pixel_size
+        smooth_int = int(400/ pixelSize)
+        # smooth_int = min(smooth_int, len(coords) // 4)
+        smooth_int = min(smooth_int, int(len(x) * 0.1))
+        if smoothContour:
+            y = smooth(y, smooth_int, "wrap")
+            x = smooth(x, smooth_int, "wrap")
+
+
 
         points = np.arange(len(y)) * ratio
 

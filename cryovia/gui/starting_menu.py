@@ -367,6 +367,19 @@ class StringListParamType(click.ParamType):
 
 
 
+
+def changeToDebug():
+    global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
+    CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
+    SEGMENTATION_MODEL_DIR .reAssign(CRYOVIA_PATH / "SegmentationModels")
+    CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
+    SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
+    cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
+    DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
+
+    os.environ["CRYOVIA_MODE"] = "1"
+
+
 @click.command()
 @click.option("-n", "--njobs", help="Number of njobs to load in and save files. For analysing you can specify other values in the GUI. Default is number of cores/2.",
                type=click.IntRange(1,mp.cpu_count(),clamp=True), default=max(1, mp.cpu_count() // 2))
@@ -385,15 +398,7 @@ def startGui(njobs, gpus, debug):
     
     """
     if debug:
-        global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
-        CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
-        SEGMENTATION_MODEL_DIR .reAssign(CRYOVIA_PATH / "SegmentationModels")
-        CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
-        SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
-        cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
-        DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
-
-        os.environ["CRYOVIA_MODE"] = "1"
+        changeToDebug()
 
     if gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(i) for i in gpus])

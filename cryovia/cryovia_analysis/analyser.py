@@ -866,7 +866,6 @@ class Analyser:
         step = int(step)
 
         current_min_distances = np.arange(min_distance,max_distance, step=step)
-        print(current_min_distances)
 
         membrane_curvatures = {}
         for membrane in self.membranes:
@@ -1245,7 +1244,7 @@ class Analyser:
             return resized_label_image
 
 
-    def estimateThickness(self, max_neighbour_dist=150, min_thickness=20, max_thickness=70, pool=None, sigma=2, no_multiprocessing=False ):
+    def estimateThickness(self, max_neighbour_dist=150, min_thickness=20, max_thickness=70, pool=None, sigma=2, no_multiprocessing=False, smooth_contour=False ):
         """
         Estimates the thickness of points for all membranes.
 
@@ -1282,7 +1281,7 @@ class Analyser:
 
             interp_ys, interp_xs = {}, {}
             for membrane in self.membranes:
-                interp_y, interp_x = membrane.getResizedCoords(ratio).T
+                interp_y, interp_x = membrane.getResizedCoords(ratio, self.pixel_size, smooth_contour).T
                 interp_ys[membrane.membrane_idx] = interp_y
                 interp_xs[membrane.membrane_idx] = interp_x
                

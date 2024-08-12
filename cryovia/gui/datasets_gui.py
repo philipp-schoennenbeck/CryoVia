@@ -1898,7 +1898,6 @@ class ConfigWidget(QDialog):
                 elif "Default_NN" in items:
                     lineedit.setCurrentText("Default_NN")
             elif isinstance(DEFAULT_CONFIGS[func][name], bool):
-                print(shown_name, func, DEFAULT_CONFIGS[func][name])
                 
 
                 lineedit = QCheckBox()
@@ -1923,11 +1922,12 @@ class ConfigWidget(QDialog):
         addParameter("Max neighbour distance [Å]", "max_neighbour_dist", "estimateThickness")
         addParameter("Min Thickness [Å]", "min_thickness", "estimateThickness")
         addParameter("Max Thickness [Å]", "max_thickness", "estimateThickness")
+        addParameter("Smooth contour", "smooth_contour", "estimateThickness")
         addParameter("Smoothing sigma", "sigma", "estimateThickness")
         addParameter("Max neighbour distance [Å]", "max_neighbour_dist", "estimateCurvature")
         addParameter("Use adaptive algorithm", "adaptive", "estimateCurvature")
-        addParameter("Min distance", "min_distance", "estimateCurvature")
-        addParameter("Max distance", "max_distance", "estimateCurvature")
+        addParameter("Min distance [Å]", "min_distance", "estimateCurvature")
+        addParameter("Max distance [Å]", "max_distance", "estimateCurvature")
         addParameter("Threshold", "threshold", "estimateCurvature")
         addParameter("Step size", "step", "estimateCurvature")
         addParameter("Only used closed", "use_only_closed", "general")
