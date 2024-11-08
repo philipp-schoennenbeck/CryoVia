@@ -7,7 +7,11 @@ from skimage.morphology import skeletonize, binary_dilation
 import cryovia.cryovia_analysis.sknw as sknw
 from scipy.ndimage import label
 from skimage.measure import label as skilabel 
-import networkx as nx
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="networkx backend defined more than once: nx-loopback")
+    import networkx as nx
 import itertools as it
 from scipy.spatial.distance import cdist
 from skimage.draw import line_nd
