@@ -125,6 +125,29 @@ def get_all_shape_curvature_paths():
     
     return shape_curvature_paths
 
+
+def get_all_real_data_curvature_paths():
+    """
+    Extracts all the paths of shape curvature files
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    shape_curvature_paths : list of paths
+    
+    """
+    global SHAPE_CURVATURE_PATH
+    create_dir(SHAPE_CURVATURE_PATH)
+    shape_curvature_paths = []
+    for file in os.listdir(SHAPE_CURVATURE_PATH):
+        file = SHAPE_CURVATURE_PATH / file
+        if file.suffix == ".pickle":
+            shape_curvature_paths.append(file)
+    
+    return shape_curvature_paths
+
 def get_all_shapes():
     """
     Extracts the names of avilable shape curvatures
@@ -356,6 +379,8 @@ class ShapeClassifier(object):
             # class_dict = {counter:c for counter, c in enumerate(sorted(list(self.classes[0])))}
             shape = [self.lastTrainedClasses[i] for i in class_prediction]
             probability = np.max(prediction,-1) / np.sum(prediction,-1)
+            # if int(os.environ["CRYOVIA_MODE"])  > 0:
+            #     probability = np.max(prediction, -1)
 
             if ndim == 1:
                 shape = shape[0]
@@ -365,7 +390,7 @@ class ShapeClassifier(object):
 
 
 
-    def loadData(self, oneHot=False):
+    def loadData(self, oneHot=False,extra_data=None):
         """
         Load all the Data of the used shapes.
         Parameters
@@ -386,6 +411,21 @@ class ShapeClassifier(object):
             curvatures = np.load(file)
             shapes = [shape for _ in range(len(curvatures))]
             return shapes, curvatures
+        
+        def read_extra_data(data):
+            with open(data, "rb") as f:
+                extra_dict = pickle.load(f).data
+            shapes = []
+            extra_curvatures = []
+            for shape, curvatures in extra_dict.items():
+                if shape in self.class_set:
+                    shapes.extend([shape for _ in range(len(curvatures))])
+                    extra_curvatures.append([c["curvatures"] for c in curvatures])
+                
+            if len(extra_curvatures) > 0:
+                extra_curvatures = np.concatenate(extra_curvatures)
+
+            return shapes, extra_curvatures
             
         def reorder(curvatures):
             new_curvatures = np.zeros_like(curvatures)
@@ -423,6 +463,13 @@ class ShapeClassifier(object):
             if len(curvature_list) > 0:
                 all_shapes.extend(shape_list)
                 all_curvatures.append(curvature_list)
+        if extra_data is not None:
+            for extra in extra_data:
+                shape_list, curvature_list = read_extra_data(extra)
+                if len(shape_list) > 0:
+                    all_shapes.extend(shape_list)
+                    all_curvatures.append(curvature_list)
+            
         
         if oneHot:
             class_dict = {c:counter for counter, c in enumerate(sorted(list(usable_shapes)))}
@@ -495,7 +542,7 @@ class ShapeClassifier(object):
 
 
 
-    def train(self):
+    def train(self, extra_data=None):
         """
         Train this classifier on the current given shapes.
         Parameters
@@ -510,7 +557,7 @@ class ShapeClassifier(object):
             return
 
         if self.type_ == "GradientBoostingClassifier":
-            all_curvatures, all_shapes, _ = self.loadData()
+            all_curvatures, all_shapes, _ = self.loadData(extra_data=extra_data)
             test_perc = 0.2
             idxs = np.arange(len(all_shapes))
             np.random.shuffle(idxs)
@@ -542,8 +589,11 @@ class ShapeClassifier(object):
             self.save()
         else:
             cpus = list_logical_devices('GPU')
+            if len(cpus) == 0:
+                cpus = list_logical_devices('CPU')
+ 
             with device(cpus[0]) as d:
-                all_curvatures, all_shapes, class_dict = self.loadData(oneHot=True)
+                all_curvatures, all_shapes, class_dict = self.loadData(oneHot=True, extra_data=extra_data)
                 test_perc = 0.2
                 idxs = np.arange(len(all_shapes))
                 np.random.shuffle(idxs)
@@ -591,7 +641,8 @@ class ShapeClassifier(object):
             test_shapes = np.argmax(test_shapes, -1)
             class_dict = {value:key for key, value in class_dict.items()} 
 
-            classes = [class_dict[i] for i in range(len(class_dict))]
+            classes = [class_dict[i] for i in range(len(class_dict)) if i in prediction_shapes or i in test_shapes]
+
             self.confusion_matrix = (confusion_matrix(prediction_shapes, test_shapes), classes)
 
             self.save()
@@ -852,6 +903,9 @@ def createNeuralNetworkClassifierWithoutDevice(classes=["circle", "not_circle"],
     model.add(Dense(100, activation='relu'))
     model.add(Dense(100, activation='relu'))
     model.add(Dense(100, activation='relu'))
+    # if int(os.environ["CRYOVIA_MODE"]) > 0:
+    #     model.add(Dense(len(classes), activation='linear'))
+    # else:
     model.add(Dense(len(classes), activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -876,6 +930,9 @@ def createNeuralNetworkClassifier(classes=["circle", "not_circle"], num_features
         model.add(Dense(100, activation='relu'))
         model.add(Dense(100, activation='relu'))
         model.add(Dense(100, activation='relu'))
+        # if int(os.environ["CRYOVIA_MODE"]) > 0:
+        #     model.add(Dense(len(classes), activation='linear'))
+        # else:
         model.add(Dense(len(classes), activation='softmax'))
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 

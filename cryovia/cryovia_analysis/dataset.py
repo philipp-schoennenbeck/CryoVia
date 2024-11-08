@@ -202,6 +202,9 @@ class Dataset:
         
         self.path = Path(path)
         self.name = name
+        names = get_all_dataset_names()
+        if name in names:
+            raise ValueError(f"{name} already exists as a Dataset.")
 
         # for key, default_value in get_default_values().items():
         #     setattr(self, key.replace(" ","_").lower(), default_value)
@@ -350,11 +353,12 @@ class Dataset:
             df = pd.read_csv(csv_path, header=0)
         except FileNotFoundError as e:
             
-            df = pd.DataFrame([], columns=["Circumference","Diameter", "Area","Shape","Shape probability","Thickness","Closed","Min thickness","Max thickness","Min curvature","Max curvature","Is probably ice","Index","Micrograph"])
-
+            df = pd.DataFrame([], columns=["Circumference","Diameter", "Area","Shape","Shape probability","Thickness","Closed","Min thickness","Max thickness",
+                                           "Min curvature","Max curvature","Is probably ice","Circularity", "Is enclosed","Enclosed distance","Index","Micrograph"])
+        df["Micrograph"] = df["Micrograph"].astype(str)
         return df 
 
-    def to_csv(self, njobs=50, csv=None):
+    def to_csv(self, njobs=1, csv=None):
         """
         Loads the data and writes the csv files.
         Parameters
@@ -375,6 +379,7 @@ class Dataset:
                 return
             csv = pd.concat(csv)
         csv.to_csv(self.pickel_path / "membranes.csv" ,index=False)
+        csv["Micrograph"] = csv["Micrograph"].astype(str)
         return csv
         
 
@@ -604,7 +609,6 @@ class Dataset:
                         if Path(self.segmentation_paths[m]).parent == self.dataset_path:
                             shutil.rmtree(self.segmentation_paths[m]) 
                 shutil.rmtree(self.mask_path)
-                
             if len(os.listdir(self.dataset_path)) == 0:
                 shutil.rmtree(self.dataset_path)
         
@@ -934,7 +938,7 @@ class Dataset:
                 with open(path / "dataset.pickle", "rb") as f:
                     dataset = CustomUnpickler(f).load()
             else:
-                raise FileExistsError(path)
+                raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
                 dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
@@ -944,7 +948,7 @@ class Dataset:
                 dataset.last_run_kwargs = {}
             if not hasattr(dataset, "pixelSizes"):
                 dataset.pixelSizes = {}
-        except FileExistsError as e:
+        except FileNotFoundError as e:
             path = DATASET_PATH / p
             if path.suffix == ".pickle" and path.is_file():
                 with open(path, "rb") as f:
@@ -953,7 +957,7 @@ class Dataset:
                 with open(path / "dataset.pickle", "rb") as f:
                     dataset = CustomUnpickler(f).load()
             else:
-                raise FileExistsError(path)
+                raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
                 dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),

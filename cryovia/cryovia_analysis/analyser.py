@@ -85,6 +85,356 @@ class curvatureAnalyser:
             membrane:Membrane
             membrane.find_close_points(max_distance=max_distance, estimate_new_vectors=estimate_new_vectors)
 
+    def estimateCurvatureAdaptive(self, max_distance=1500, min_distance=35, gaussian_filter_size=9, threshold=2, step=100):
+
+
+        from circle_fit import hyperLSQ
+        from scipy.stats import linregress
+        from scipy.signal import savgol_filter
+
+        def smooth(x, wl, method="interp"):
+            return savgol_filter(x, min(len(x), wl),3,mode=method)
+        def check_collinear(points, threshold=1e-6, return_distances=False):
+            """
+            Check if points are collinear.
+            
+            :param points: List of (x, y) tuples.
+            :param threshold: Maximum allowable deviation to consider points collinear.
+            :return: True if points are collinear, False otherwise.
+            """
+            x, y = points.T
+
+            
+            # Check if all x-values are the same (vertical line)
+            if np.all(x == x[0]):
+                return True
+            
+            # Perform linear regression
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            
+            # Calculate the distances from the line y = slope * x + intercept
+            distances = np.abs(y - (slope * x + intercept))
+            if return_distances:
+                return np.all(distances < threshold), distances 
+            # Check if all distances are below the threshold
+            return np.all(distances < threshold)
+
+        def f(c, x, y):
+            """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
+            Ri = calc_R(x, y, *c)
+            return Ri - Ri.mean()
+
+
+        def calc_R(x,y, xc, yc):
+            """ calculate the distance of each 2D points from the center (xc, yc) """
+            return np.sqrt((x-xc)**2 + (y-yc)**2)
+        def matlab_style_gauss(size=21,sigma=10):
+            """
+            2D gaussian mask - should give the same result as MATLAB's
+            fspecial('gaussian',[shape],[sigma])
+            """
+            x = np.arange(-(size//2), size//2 + 1)
+            h = np.exp( -(x*x) / (2.*sigma*sigma) )
+            sumh = h.sum()
+            if sumh != 0:
+                h /= sumh
+            return x,h
+
+        def smooth_curvatures(gaus_size, curvatures, is_circle=False):
+            x,gaus_filter = matlab_style_gauss(gaus_size,gaus_size // 2)
+            if is_circle:
+                resized_curvatures = np.concatenate((curvatures[-(gaus_size//2):], curvatures, curvatures[:(gaus_size//2)]))
+            else:
+                before = np.ones(gaus_size//2) * curvatures[0]
+                after = np.ones(gaus_size//2) * curvatures[-1]
+                resized_curvatures = np.concatenate((before, curvatures, after))
+            
+            
+            smoothed_curvature = np.convolve(resized_curvatures, gaus_filter, "valid")
+
+
+            return smoothed_curvature
+
+        def convert_input(coords):
+            """
+            Converts the input coordinates from a 2D List or 2D np.ndarray to 2 separate 1D np.ndarrays.
+
+            Parameters
+            ----------
+            coords: 2D List or 2D np.ndarray of shape (n,2). X,Y point coordinates.
+
+            Returns
+            -------
+            x   : np.ndarray. X point coordinates.
+            y   : np.ndarray. Y point coordinates.
+            """
+            if isinstance(coords, np.ndarray):
+                assert coords.ndim == 2, "'coords' must be a (n, 2) array"
+                assert coords.shape[1] == 2, "'coords' must be a (n, 2) array"
+                x = coords[:, 0]
+                y = coords[:, 1]
+            elif isinstance(coords, list):
+                x = np.array([point[0] for point in coords])
+                y = np.array([point[1] for point in coords])
+            else:
+                raise Exception("Parameter 'coords' is an unsupported type: " + str(type(coords)))
+            return x, y
+
+
+        def sigma(x, y, xc: float, yc: float, r: float) -> float:
+            """
+            Computes the sigma (RMS error) of a circle fit (xc, yc, r) to a set of 2D points (x, y).
+            ----------
+            x   : np.ndarray. X point coordinates.
+            y   : np.ndarray. Y point coordinates.
+            xc  : float. Circle center X coordinate.
+            yc  : float. Circle center Y coordinate.
+            r   : float. Circle radius.
+
+            Returns
+            -------
+            sigma : float. Root Mean Square of error (distance) between points (x, y) and circle (xc, yc, r).
+            """
+            dx = x - xc
+            dy = y - yc
+            s: float = np.sqrt(np.mean((np.sqrt(dx ** 2 + dy ** 2) - r) ** 2))
+            return s
+
+        def test_hyperLSQ(coords, iter_max: int = 99):
+            """
+            Kenichi Kanatani, Prasanna Rangarajan, "Hyper least squares fitting of circles and ellipses"
+            Computational Statistics & Data Analysis, Vol. 55, pages 2197-2208, (2011)
+
+            Parameters
+            ----------
+            coords: 2D List or 2D np.ndarray of shape (n,2). X,Y point coordinates.
+            iter_max    : Optional int. Maximum number of iterations for the iterative fitting algorithm.
+
+            Returns
+            -------
+            xc  : float. x coordinate of the circle fit
+            yc  : float. y coordinate of the circle fit
+            r   : float. Radius of the circle fit
+            s   : float. Sigma (RMS of error) of the circle fit
+            """
+            x, y = convert_input(coords)
+            n = x.shape[0]
+
+            Xi = x - x.mean()
+            Yi = y - y.mean()
+            Zi = Xi * Xi + Yi * Yi
+
+            # compute moments
+            Mxy = (Xi * Yi).sum() / n
+            Mxx = (Xi * Xi).sum() / n
+            Myy = (Yi * Yi).sum() / n
+            Mxz = (Xi * Zi).sum() / n
+            Myz = (Yi * Zi).sum() / n
+            Mzz = (Zi * Zi).sum() / n
+
+            # computing the coefficients of characteristic polynomial
+            Mz = Mxx + Myy
+            Cov_xy = Mxx * Myy - Mxy * Mxy
+            Var_z = Mzz - Mz * Mz
+
+            A2 = 4 * Cov_xy - 3 * Mz * Mz - Mzz
+            A1 = Var_z * Mz + 4. * Cov_xy * Mz - Mxz * Mxz - Myz * Myz
+            A0 = Mxz * (Mxz * Myy - Myz * Mxy) + Myz * (Myz * Mxx - Mxz * Mxy) - Var_z * Cov_xy
+            A22 = A2 + A2
+
+            # finding the root of the characteristic polynomial
+            Y = A0
+            X = 0.
+            for i in range(iter_max):
+                Dy = A1 + X * (A22 + 16. * (X ** 2))
+                xnew = X - Y / Dy
+                if xnew == X or not np.isfinite(xnew):
+                    break
+                ynew = A0 + xnew * (A1 + xnew * (A2 + 4. * xnew * xnew))
+                if abs(ynew) >= abs(Y):
+                    break
+                X, Y = xnew, ynew
+
+            det = X ** 2 - X * Mz + Cov_xy
+            if np.isclose(det, 0):   
+                return None, None, None, None
+            Xcenter = (Mxz * (Myy - X) - Myz * Mxy) / det / 2.
+            Ycenter = (Myz * (Mxx - X) - Mxz * Mxy) / det / 2.
+
+            xc: float = Xcenter + x.mean()
+            yc: float = Ycenter + y.mean()
+            r = np.sqrt(abs(Xcenter ** 2 + Ycenter ** 2 + Mz))
+            s = sigma(x, y, xc, yc, r)
+            return xc, yc, r, s
+
+        max_distance = int(max_distance)
+        min_distance = int(min_distance)
+        step = int(step)
+
+        current_min_distances = np.arange(min_distance,max_distance, step=step)
+
+        membrane_curvatures = {}
+        for membrane in self.membranes:
+           
+            coords = membrane.coords
+            smooth_int = int(400/self.pixel_size)
+            smooth_int = min(smooth_int, len(coords) // 4)
+            smooth_int = int(len(coords) * 0.1)
+            if membrane.is_circle:
+                coords = np.array((smooth(coords.T[0],smooth_int, method="wrap"),smooth(coords.T[1],smooth_int, method="wrap"))).T
+            else:
+                coords = np.array((smooth(coords.T[0],smooth_int, method="interp"),smooth(coords.T[1],smooth_int, method="interp"))).T
+            
+
+            old_coords = membrane.coords
+            curvature = [p.curvature for p in membrane.points(n=1)]
+
+
+            for i in range(len(membrane.points(n=1))):
+                membrane.point_list[i].coordinates_yx = coords[i]
+
+            
+            membrane.find_close_points(max_distance=max_distance, estimate_new_vectors=False)
+         
+            
+            
+            current = []
+            if membrane.is_circle:
+
+                y,x = np.array([p.coordinates_yx for p in membrane.points(n=1)]).T
+
+                coords = np.array((x,y),dtype=np.int32).T
+                polygonimage = np.zeros(self.segmentation_stack.shape[1:], dtype=np.uint8)
+                polygonimage = cv2.fillPoly(polygonimage, [coords], 1)
+
+                
+            for point_counter, p in enumerate(membrane.points(n=1)):          
+                
+                neighbourhood = p.neighbourhood_points
+
+
+                neighbour_idxs = np.array([n[0] for n in neighbourhood[0]])
+                neighbour_idxs = np.concatenate([neighbour_idxs, [p.idx], [n[0] for n in neighbourhood[1]]])
+
+                neighbour_distances = np.array([n[1] for n in neighbourhood[0]])
+                neighbour_distances = np.concatenate([neighbour_distances, [0], [n[1] for n in neighbourhood[1]]])
+
+                max_neighbour_distance = np.max(neighbour_distances)
+
+                neighbour_coords = np.array([n[2] for n in neighbourhood[0]])
+                neighbour_coords = np.concatenate([neighbour_coords, [p.coordinates_yx], [n[2] for n in neighbourhood[1]]])
+                
+
+                best_radius = None
+                best_center = None
+
+                allowed_to_change = True
+                
+                current_distances = []
+                for cmd in current_min_distances:
+                    if not allowed_to_change:
+                        current_distances.append(True)
+                        continue
+
+                    
+                    pts = neighbour_coords[neighbour_distances < cmd]
+
+                    method = test_hyperLSQ
+
+
+                    res = method(pts)
+
+                    if check_collinear(pts, 0.1) or res[0] is None:
+                        radius = np.inf
+                        center = p.coordinates_yx[::-1]
+                        current_distances.append(False)
+                        best_radius = radius
+                        best_center = center
+                        continue
+                    
+
+                    xc, yc, r, sig = res
+
+                    center = np.array((yc,xc))
+                    radius = r
+
+
+                    y,x = pts.T
+                    distance = np.abs(f(center, x, y))
+                    current_distances.append(np.any(distance > threshold))
+                    if not current_distances[-1] and allowed_to_change:
+                        best_radius = radius
+                        best_center = center
+                    if current_distances[-1] and allowed_to_change:
+                        allowed_to_change = False
+                    if cmd > max_neighbour_distance:
+                        allowed_to_change = False
+                    
+
+
+                if best_radius is None:                  
+                    
+                    
+                    
+                    pts = np.array(p.get_coords_of_neighbourhood(min_distance)).T
+                    method = test_hyperLSQ
+                    
+                    res = method(pts)
+                    
+                    if res[0] is None:
+                        best_radius = np.inf
+                        best_center = p.coordinates_yx[::-1]
+                    else:
+                        xc, yc, r, sig = res
+                        
+                        best_radius = r
+                        best_center = np.array((yc,xc))
+
+
+                radius = best_radius
+                center = best_center
+
+                center = center[::-1]
+
+
+                p.circle_center_yx = center
+                
+                # p.curvature_radius = radius
+
+                
+
+                # Curvature is the invers of the radius of a fitted circle
+                if radius == np.inf:
+                    c = 0
+                else:
+                    c = 1/(radius*self.pixel_size)
+
+                # Find out which side of the membrane the circle center is
+                    if membrane.is_circle:
+                        if not p.in_polygon(polygonimage,save_path=None):
+                            
+                            c *= -1
+
+                p.curvature = c
+                current.append(c)
+                
+
+            if gaussian_filter_size > 1:
+                new_curvatures = smooth_curvatures(gaussian_filter_size, current, membrane.is_circle)
+            else:
+                new_curvatures = current
+
+            for current_c, p, old_c in zip(new_curvatures, membrane.points(n=1), old_coords):
+                p.coordinates_yx = old_c
+                p.curvature = current_c
+
+
+            
+
+            membrane_curvatures[membrane.membrane_idx] = new_curvatures
+
+        return membrane_curvatures
+
     def estimateCurvature(self, favor_positive_curvature=True, max_neighbour_dist=200, gaussian_filter_size=9):
         """Estimate the curvature at each point by fitting a circle to neighbourhood points
         Parameters:
@@ -291,8 +641,10 @@ class Analyser:
         self.step_size = np.max([1,step_size/self.pixel_size])
 
         if np.sum(self.loadSegmentation()) == 0:
+
             seg = self.loadSegmentation()
-            if len(seg) ==2:
+            
+            if len(seg.shape) == 2:
                 seg = sparse.as_coo(np.zeros((0, *seg.shape)))
             self.segmentation_stack = seg
             
@@ -451,7 +803,11 @@ class Analyser:
             skeleton = skeletonize(layer)
             idxs_to_use.append(np.sum(skeleton) >= self.min_size)
         new_stack = [layer for to_use, layer in zip(idxs_to_use, new_stack) if to_use]
-        new_stack = sparse.as_coo(np.array(new_stack).astype(np.uint8))
+        if len(new_stack) == 0:
+            new_stack = sparse.zeros((0, *data.shape[1:]))
+        else:
+            new_stack = sparse.as_coo(np.array(new_stack).astype(np.uint8))
+        
         self.segmentation_stack = new_stack
 
     def findClosestVesicles(self):
@@ -871,14 +1227,15 @@ class Analyser:
         for membrane in self.membranes:
            
             coords = membrane.coords
-            smooth_int = int(400/self.pixel_size)
-            smooth_int = min(smooth_int, len(coords) // 4)
+            # smooth_int = int(400/self.pixel_size)
+            # smooth_int = min(smooth_int, len(coords) // 4)
             smooth_int = int(len(coords) * 0.1)
+            smooth_int = max(4, smooth_int)
+             
             coords = np.array((smooth(coords.T[0],smooth_int, method="wrap"),smooth(coords.T[1],smooth_int, method="wrap"))).T
             
 
             old_coords = membrane.coords
-            curvature = [p.curvature for p in membrane.points(n=1)]
 
 
             for i in range(len(membrane.points(n=1))):
@@ -912,8 +1269,17 @@ class Analyser:
 
                 max_neighbour_distance = np.max(neighbour_distances)
 
-                neighbour_coords = np.array([n[2] for n in neighbourhood[0]])
-                neighbour_coords = np.concatenate([neighbour_coords, [p.coordinates_yx], [n[2] for n in neighbourhood[1]]])
+                neighbour_coords = []
+                left_n = [n[2] for n in neighbourhood[0]]
+                if len(left_n) > 0:
+                    neighbour_coords.append(left_n)
+
+            
+                neighbour_coords.append([p.coordinates_yx])
+                right_n = [n[2] for n in neighbourhood[1]]
+                if len(right_n) > 0:
+                    neighbour_coords.append(right_n)
+                neighbour_coords = np.concatenate(neighbour_coords)
                 
 
                 best_radius = None
@@ -1281,7 +1647,7 @@ class Analyser:
 
             interp_ys, interp_xs = {}, {}
             for membrane in self.membranes:
-                interp_y, interp_x = membrane.getResizedCoords(ratio, self.pixel_size, smooth_contour).T
+                interp_y, interp_x = membrane.getResizedCoords(ratio, self.pixel_size, smooth_contour, micrographShape=self.micrograph_shape).T
                 interp_ys[membrane.membrane_idx] = interp_y
                 interp_xs[membrane.membrane_idx] = interp_x
                
@@ -1942,7 +2308,8 @@ class AnalyserWrapper:
         for m in analyser.membranes:
             curvatures = [float(p.curvature) if p.curvature is not None else None for p in m.point_list ]
             thicknesses = [float(p.thickness) if p.thickness is not None else None for p in m.point_list]
-            points_json[m.membrane_idx] = {"Thickness":thicknesses, "Curvature":curvatures}
+            coordinates = [[int(j) for j in i] for i in m.coords]
+            points_json[m.membrane_idx] = {"Thickness":thicknesses, "Curvature":curvatures, "Coordinates":coordinates}
         with open(directory / "points.json", "w") as f:
             json.dump(points_json, f)
 
@@ -1969,7 +2336,7 @@ class AnalyserWrapper:
             return filtered_image
         a_attributes = []
         headers = ["Circumference", "Diameter", "Area", "Shape", "Shape probability", "Thickness", "Closed", "Min thickness", "Max thickness", "Mean thickness",
-                   "Min curvature", "Max curvature", "Is probably ice", "Is enclosed","Enclosed distance", "Index"]
+                   "Min curvature", "Max curvature", "Is probably ice", "Circularity", "Is enclosed","Enclosed distance", "Index"]
         seg_image = analyser.segmentation_stack
 
         if len(analyser.membranes) > 0:
@@ -1982,7 +2349,7 @@ class AnalyserWrapper:
                 micrograph = None
             for m in analyser.membranes:
                 a_attributes.append([m.length, m.diameter,m.area, m.shape, m.shape_probability, m.thickness, m.is_circle, m.min_thickness, m.max_thickness,m.mean_thickness,
-                                    m.min_curvature, m.max_curvature, m.isIceContamination,len(m.is_enclosed_in) > 0,None if len(m.is_enclosed_in) == 0 else np.min([i[1] for i in m.is_enclosed_in]),m.membrane_idx ])
+                                    m.min_curvature, m.max_curvature, m.isIceContamination,m.circularity,len(m.is_enclosed_in) > 0,None if len(m.is_enclosed_in) == 0 else np.min([i[1] for i in m.is_enclosed_in]),m.membrane_idx ])
                 if micrograph is not None:
                     thumbnail = m.get_thumbnail(micrograph)
                     thumbnail.save(directory / "thumbnails" / "micrograph" / f"{m.membrane_idx}.png")
@@ -2096,6 +2463,7 @@ class AnalyserWrapper:
         df = pd.read_csv(path,header=0)
 
         df["Micrograph"] = self.name
+        df["Micrograph"] = df["Micrograph"].astype(str)
         return df
 
     def remove(self):

@@ -1,2 +1,3 @@
 [console_scripts]
 cryovia = cryovia.gui.starting_menu:startGui
+

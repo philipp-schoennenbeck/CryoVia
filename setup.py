@@ -43,11 +43,8 @@ setup(
         'tqdm',
         "silence-tensorflow",
         "starfile",
-        "ray"
-        # 'napari_mrcfile_reader'
-        # 'nvidia-cudnn-cu11==8.1.0',
-        # 'cudatoolkit==11.2.2',
-        # 'tensorflow>=2.11.0'
+        "ray",
+        "circle-fit"
 
     ],
     entry_points={

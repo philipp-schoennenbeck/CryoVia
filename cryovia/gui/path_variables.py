@@ -32,5 +32,5 @@ SHAPE_CURVATURE_PATH = PathContainer(Path().home() / ".cryovia" / "Shape_curvatu
 cryovia_TEMP_DIR = PathContainer(Path().home() / ".cryovia" / "temp")
 DATASET_PATH = PathContainer(Path().home() / ".cryovia" / "DATASETS")
 
-
-os.environ["CRYOVIA_MODE"] = "0"
+if os.environ.get("CRYOVIA_MODE") is None:
+    os.environ["CRYOVIA_MODE"] = "0"

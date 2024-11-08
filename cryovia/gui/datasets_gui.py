@@ -43,10 +43,10 @@ try:
 except:
     pass
 
-SHOWN_ATTRIBUTES = ["Circumference", "Diameter","Area", "Shape", "Shape probability", "Closed", "Thickness", "Mean thickness", "Min thickness", "Max thickness", "Min curvature", "Max curvature", "Is probably ice","Is enclosed","Enclosed distance", "Index", "Micrograph"]
+SHOWN_ATTRIBUTES = ["Circumference", "Diameter","Area", "Shape", "Shape probability", "Closed", "Thickness", "Mean thickness", "Min thickness", "Max thickness", "Min curvature", "Max curvature", "Is probably ice","Circularity","Is enclosed","Enclosed distance", "Index", "Micrograph"]
 NUMBER_OF_COLUMNS = 10
 CELL_PADDING = 5
-NUMERICAL_VALUES = set(["Circumference", "Diameter","Area","Shape probability", "Thickness", "Min thickness", "Max thickness", "Min curvature", "Max curvature","Is probably ice", "Enclosed distance", "Mean thickness"])
+NUMERICAL_VALUES = set(["Circumference", "Diameter","Area","Shape probability", "Thickness", "Min thickness", "Max thickness", "Min curvature", "Max curvature","Is probably ice","Circularity", "Enclosed distance", "Mean thickness"])
 STRING_VALUES = set(["Shape"])
 BOOL_VALUE = set(["Closed", "Is enclosed"])
 
@@ -208,6 +208,7 @@ def get_analyser(row, dataset):
         micrograph = row["Micrograph"]
     if not isinstance(micrograph, str):
         micrograph = micrograph.iloc[0]
+    micrograph = str(micrograph)
     wrapper = AnalyserWrapper(dataset.dataset_path / micrograph)
     return wrapper
 
@@ -418,7 +419,6 @@ class PandasModel(QtCore.QAbstractTableModel):
     def __init__(self, data, dataset, parent=None):
         global SHOWN_ATTRIBUTES
         QtCore.QAbstractTableModel.__init__(self, parent)
-        
         data:pd.DataFrame = data.round(6)
         data.set_index(pd.Index([i for i in range(data.shape[0])]))
         self._data:pd.DataFrame = data
@@ -610,6 +610,7 @@ class DatasetTabsWidget(QTabWidget):
 
 
     def printStats(self):
+        global NUMERICAL_VALUES, STRING_VALUES, BOOL_VALUE
         tableview:CustomQTableView = self.currentWidget()
         
         if tableview is None:
@@ -627,14 +628,30 @@ class DatasetTabsWidget(QTabWidget):
         
             data:pd.DataFrame = tableview.model().shown_data
             column = data.columns[column_idx]
-            std = data[column].std()
-            mean = data[column].mean()
-            min_ = data[column].min()
-            max_ = data[column].max()
-            median = np.median(data[column])
-            median_absolute_deviation = np.median(np.abs(data[column] - np.median(data[column])))
             entries = len(data[column])
-            text = f"\n{name}: {column}\nNumber of membranes: {entries}\nMinimum: {min_}\nMaximum: {max_}\nMean: {mean}\nStd: {std}\nMedian: {median}\nMedian absolute deviation: {median_absolute_deviation}\n"
+            if column in NUMERICAL_VALUES:
+                std = data[column].std()
+                mean = data[column].mean()
+                min_ = data[column].min()
+                max_ = data[column].max()
+                median = np.median(data[column])
+                median_absolute_deviation = np.median(np.abs(data[column] - np.median(data[column])))
+                
+                text = f"\n{name}: {column}\nNumber of membranes: {entries}\nMinimum: {min_}\nMaximum: {max_}\nMean: {mean}\nStd: {std}\nMedian: {median}\nMedian absolute deviation: {median_absolute_deviation}\n"
+            elif column in STRING_VALUES:
+                values = data[column].value_counts().to_dict()
+                text = f"\n{name}: {column}\nNumber of membranes: {entries}\n"
+                for key, value in values.items():
+                    text += f"{key}: {value}\n"
+                
+                
+            elif column in BOOL_VALUE:
+                values = data[column].value_counts().to_dict()
+                text = f"\n{name}: {column}\nNumber of membranes: {entries}\n"
+                for key, value in values.items():
+                    text += f"{key}: {value}\n"
+            else:
+                text = "Could not find the datatype of this column."
             MESSAGE(text)
 
 
@@ -830,8 +847,9 @@ class DatasetLabelDelegate(QItemDelegate):
 
 
 class DoubleClickLineEdit(QLineEdit):
-    def __init__(self, text, parent=None):
+    def __init__(self, text, parent=None, index=0):
         super().__init__(text, parent)
+        self.index = index
         self.setReadOnly(True)
         self.setFrame(False)
         self.setStyleSheet("QLineEdit { border: none; }")  # Remove the border
@@ -840,7 +858,39 @@ class DoubleClickLineEdit(QLineEdit):
         # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
     def mousePressEvent(self, event):
-        self.parent().parent().parent().selectedThisDataset(self.parent().dataset.name)
+        modifiers = QApplication.keyboardModifiers()
+        item_rect = self.parent().parent().parent().visualItemRect(self.parent().parent().parent().item(self.index))
+
+        # Calculate the center point of the item rect to simulate clicking on it
+        center_point = item_rect.center()
+
+        # Simulate a Shift+Click using a QMouseEvent
+        shift_click_event = QMouseEvent(
+            QMouseEvent.MouseButtonPress,  # The event type
+            center_point,                  # The position of the click
+            Qt.LeftButton,                 # The button pressed (left-click)
+            Qt.LeftButton,                 # The state of buttons during the event
+            modifiers               # The keyboard modifier (Shift)
+        )
+
+        # Post the event to the list widget to simulate the click
+        QApplication.postEvent(self.parent().parent().parent().viewport(), shift_click_event)
+
+        # Simulate a MouseButtonRelease to finish the click
+        release_event = QMouseEvent(
+            QMouseEvent.MouseButtonRelease,  # The event type (button release)
+            center_point,                    # The position of the release
+            Qt.LeftButton,                   # The button released (left-click)
+            Qt.LeftButton,                   # The state of buttons during the event
+            modifiers                 # The keyboard modifier (Shift)
+        )
+        QApplication.postEvent(self.parent().parent().parent().viewport(), release_event)
+
+
+
+
+
+        # self.parent().parent().parent().selectedThisDataset(self.parent().dataset.name)
 
     def mouseDoubleClickEvent(self, event):
         # self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
@@ -889,82 +939,21 @@ class DoubleClickLineEdit(QLineEdit):
             self.setStyleSheet("")
 
 
-# class EditableLabel(QLabel):
-#     def __init__(self, text, parent=None):
-#         super().__init__(text, parent)
-#         self.line_edit = QLineEdit()
-#         self.line_edit.setText(text)
-#         self.line_edit.setVisible(False)
-#         self.line_edit.setFrame(False)
-#         self.line_edit.editingFinished.connect(self.finish_editing)
-#         self.line_edit.setFont(QFont(self.font().family(), self.font().pointSize()))
-
-#     def resizeEvent(self, event):
-#         super().resizeEvent(event)
-#         self.line_edit.setGeometry(self.rect())
-
-#     def mouseDoubleClickEvent(self, event):
-#         self.start_editing()
-
-#     def start_editing(self):
-#         self.line_edit.setText(self.text())
-#         # self.setVisible(False)
-#         self.line_edit.setVisible(True)
-#         self.line_edit.setFocus()
-#         self.line_edit.selectAll()
-#         print(self.isVisible(), self.line_edit.isVisible())
-
-#     def finish_editing(self):
-#         print(self.isVisible(), self.line_edit.isVisible())
-#         self.setText(self.line_edit.text())
-#         self.setVisible(True)
-#         self.line_edit.setVisible(False)
-
-
-# class EditableLabel(QLabel):
-#     def __init__(self, text, parent=None):
-#         super().__init__(text, parent)
-#         self.line_edit = QLineEdit(self)
-#         self.line_edit.setText(text)
-#         self.line_edit.setVisible(False)
-#         self.line_edit.setFrame(False)
-#         self.line_edit.editingFinished.connect(self.finish_editing)
-#         self.line_edit.setFont(QFont(self.font().family(), self.font().pointSize()))
-
-#     def mouseDoubleClickEvent(self, event):
-#         self.start_editing()
-
-#     def start_editing(self):
-#         self.line_edit.setText(self.text())
-#         self.setVisible(False)
-#         self.line_edit.setVisible(True)
-#         self.line_edit.setFocus()
-#         self.line_edit.selectAll()
-#         print(self.isVisible(), self.line_edit.isVisible())
-
-#     def finish_editing(self):
-#         print(self.isVisible(), self.line_edit.isVisible())
-#         self.setText(self.line_edit.text())
-#         self.setVisible(True)
-#         self.line_edit.setVisible(False)
-
-
-
 
 
 
 class DatasetLabelWithIcon(QWidget):
-    def __init__(self, dataset, isHealthy, missingFiles={}):
+    def __init__(self, dataset, isHealthy, missingFiles={}, index=0):
         super().__init__()
         self.dataset = dataset
-        
+        self.index = index
         tooltip = self.setColorAndGetTooltip(isHealthy, missingFiles)
         # Create a horizontal layout    
         layout = QHBoxLayout()
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(2)
         # Create a label for the text and add it to the layout
-        self.text_label = DoubleClickLineEdit(str(self.dataset.name))
+        self.text_label = DoubleClickLineEdit(str(self.dataset.name), index=self.index)
         layout.addWidget(self.text_label)
 
         # Create a label for the pixmap and add it to the layout
@@ -991,7 +980,6 @@ class DatasetLabelWithIcon(QWidget):
     
     def setColorAndGetTooltip(self, isHealthy, missingFiles):
 
-        "micrographs", "segmentations", "analysers"
         if isHealthy is None:
             self.color = "yellow"
             tooltip = "Checking if all files exist."
@@ -1068,34 +1056,6 @@ class DatasetLabel(QListWidgetItem):
 
 
 
-# class DatasetLabel(QListWidgetItem):
-#     def __init__(self, dataset, *args):
-#         super().__init__(*args)
-#         self.dataset = dataset
-#         self.setReadOnly(True)
-        
-
-# class CircleIconWidget(QLabel):
-#     def __init__(self, color="green"):
-#         super().__init__()
-#         self.color = color
-#         self.initUI()
-
-#     def initUI(self):
-#         # Create a QPixmap to draw the green circle
-#         pixmap = QPixmap(12, 12)  # Set the size of the pixmap
-#         pixmap.fill(QColor('transparent'))  # Fill it with transparent color
-        
-#         # Create a QPainter to draw on the QPixmap
-#         painter = QPainter(pixmap)
-#         painter.setBrush(QColor(self.color))
-#         painter.setPen(QColor(self.color))
-#         painter.drawEllipse(0, 0, 12, 12)  # Draw the colored circle
-#         painter.end()
-
-#         self.setPixmap(pixmap)
-
-#         self.setToolTip('Green Circle Icon')
         
 class DatasetListWidget(QListWidget):
     def __init__(self, parent=None):
@@ -1114,6 +1074,9 @@ class DatasetListWidget(QListWidget):
         self.startWorker()
 
         self.loadDatasets()
+        
+        
+
         self.itemSelectionChanged.connect(self.on_selection_changed)
         self.itemSelectionChanged.connect(self.showInfo)
         
@@ -1134,18 +1097,20 @@ class DatasetListWidget(QListWidget):
         self.datasetsWidgets = {}
         datasets = get_all_dataset_paths()
         datasets = [Dataset.load(dataset) for dataset in datasets]
+        counter = 0
         for dataset in datasets:
             dummy = QListWidgetItem(self)
             health = None
             missingFiles = {}
             if dataset.name in self.healthCheck:
                 health, missingFiles = self.healthCheck[dataset.name]
-            label = DatasetLabelWithIcon(dataset, health, missingFiles)
+            label = DatasetLabelWithIcon(dataset, health, missingFiles, counter)
             dummy.setSizeHint(label.sizeHint())
             self.setItemWidget(dummy, label)
             self.datasets[dataset.name] = label
             self.datasetsWidgets[dataset.name] = dummy
             self.queue.put(dataset)
+            counter += 1
         datasets_to_del = []
         for key, value in self.healthCheck.items():
             if key not in self.datasets:
@@ -1226,6 +1191,10 @@ class DatasetListWidget(QListWidget):
         selection = self.selectedItems()
         infowidget = self.mainWindow().datasetInfoWidget
         if len(selection) != 1:
+            for item in selection:
+                item = self.itemWidget(item)
+                
+                dataset = item.dataset
             infowidget.resetInfos()
             return
         for item in selection:
@@ -2690,6 +2659,7 @@ class MicrographData:
             try:
                 self.seg = q2n.gray2qimage(self.seg)
             except Exception as e:
+                print(e)
                 self.seg = None
         
     def loadData(self, fill=False, forMP=False):
@@ -4016,118 +3986,3 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-# class EditableLineEdit(QLineEdit):
-#     def __init__(self, text, parent=None):
-#         super().__init__(text, parent)
-#         self.setReadOnly(True)
-#         self.setFrame(False)
-#         self.setStyleSheet("QLineEdit { border: none; }")  # Remove the border
-#         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Make the line edit transparent to mouse events initially
-
-#     def mouseDoubleClickEvent(self, event):
-#         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)  # Allow the line edit to receive mouse events
-#         self.setReadOnly(False)
-#         self.setFocus()
-#         self.selectAll()
-
-#     def focusOutEvent(self, event):
-#         super().focusOutEvent(event)
-#         self.setReadOnly(True)
-#         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Make it transparent to mouse events again
-
-# class CustomListItem(QWidget):
-#     def __init__(self, text, pixmap):
-#         super().__init__()
-
-#         # Create a horizontal layout with no margins and spacing
-#         layout = QHBoxLayout()
-#         layout.setContentsMargins(0, 0, 0, 0)
-#         layout.setSpacing(5)  # Set spacing between widgets
-
-#         # Create an editable line edit for the text and add it to the layout
-#         self.editable_line_edit = EditableLineEdit(text)
-#         layout.addWidget(self.editable_line_edit)
-
-#         # Create a label for the pixmap and add it to the layout
-#         pixmap_label = QLabel()
-#         pixmap_label.setPixmap(pixmap)
-#         layout.addWidget(pixmap_label)
-
-#         # Add stretch to push the pixmap to the right side
-#         layout.addStretch()
-
-#         # Set the layout to the custom widget
-#         self.setLayout(layout)
-
-#         # Optionally, set a fixed height to make it more compact
-#         self.setFixedHeight(30)
-
-#     def get_text(self):
-#         return self.editable_line_edit.text()
-
-#     def set_selected(self, selected):
-#         if selected:
-#             self.setStyleSheet("background-color: lightblue;")
-#         else:
-#             self.setStyleSheet("")
-
-# class Example(QWidget):
-#     item_selection_changed = pyqtSignal()
-
-#     def __init__(self):
-#         super().__init__()
-#         self.initUI()
-
-#     def initUI(self):
-#         # Create a QListWidget
-#         self.list_widget = QListWidget()
-
-#         # Connect the selection change signal
-#         self.list_widget.itemSelectionChanged.connect(self.on_selection_changed)
-
-#         # Create a QPixmap
-#         pixmap = QPixmap(16, 16)
-#         pixmap.fill(QColor('green'))
-
-#         # Create a custom list item with text and pixmap
-#         custom_item = CustomListItem("Sample Text", pixmap)
-
-#         # Create a QListWidgetItem
-#         list_item = QListWidgetItem(self.list_widget)
-
-#         # Set the size hint of the list item to match the custom widget
-#         list_item.setSizeHint(custom_item.sizeHint())
-
-#         # Add the custom widget to the QListWidget
-#         self.list_widget.setItemWidget(list_item, custom_item)
-
-#         # Button to get selected items
-#         button = QPushButton("Get Selected Items")
-#         button.clicked.connect(self.get_selected_items)
-
-#         # Create a vertical layout and add the list widget to it
-#         layout = QVBoxLayout()
-#         layout.addWidget(self.list_widget)
-#         layout.addWidget(button)
-#         self.setLayout(layout)
-
-#         self.setWindowTitle('Custom List Widget Item')
-#         self.show()
-
-#     def get_selected_items(self):
-#         selected_items = self.list_widget.selectedItems()
-#         for item in selected_items:
-#             custom_widget = self.list_widget.itemWidget(item)
-#             if custom_widget:
-#                 print(f"Selected item text: {custom_widget.get_text()}")
-
-#     def on_selection_changed(self):
-#         for i in range(self.list_widget.count()):
-#             item = self.list_widget.item(i)
-#             custom_widget = self.list_widget.itemWidget(item)
-#             if custom_widget:
-#                 custom_widget.set_selected(item.isSelected())

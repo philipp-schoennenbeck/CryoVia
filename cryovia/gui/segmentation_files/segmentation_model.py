@@ -687,7 +687,8 @@ class segmentationModel:
     def predict_multiprocessing(self, file_paths, pixelSizes, gpu=None,  kwargs={}, njobs=2, threads=10,tqdm_file=sys.stdout,dataset_name="", stopEvent=None, seg_path=None, mask_path=None ):
         if stopEvent is None:
             stopEvent = mp.get_context("spawn").Event()
-        
+        if gpu is None:
+            gpu = get_logical_devices()
         if isinstance(gpu, str):
             gpu = [gpu]
 
@@ -703,6 +704,9 @@ class segmentationModel:
         outputQueue = mp.get_context("spawn").Queue()
         errorQueue = mp.get_context("spawn").Queue()
         njobs = threads * njobs
+        njobs = min(njobs, mp.cpu_count())
+        njobs = max(3, njobs)
+        
 
         number_of_loader_proccesses = max(1, int((njobs - len(gpu)) * 1/3))
         number_of_unpatchifyer_procceses = max(1, njobs - len(gpu) - number_of_loader_proccesses)
@@ -710,11 +714,10 @@ class segmentationModel:
         loaderFinishedEvent = mp.get_context("spawn").Event()
         predictorFinishedEvent = mp.get_context("spawn").Event()
         
-        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config, errorQueue)) for _ in range(number_of_loader_proccesses)]
+        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config, errorQueue, idx)) for idx in range(number_of_loader_proccesses)]
 
 
         predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue )) for gpu_idx in range(len(gpu))]
-
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
         unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path,errorQueue)) for _ in range(number_of_unpatchifyer_procceses)]
@@ -771,7 +774,6 @@ class segmentationModel:
         
         gc.collect()
         
-
         if not errorQueue.empty():
             tqdm_file.write("Something went wrong during segmentation. Following errors occurred:\n")
             errorsFound = []
@@ -799,7 +801,7 @@ def normalize(x):
     return x
 
 
-def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue):
+def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx):
     
     # import tensorflow as tf
     # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -816,7 +818,6 @@ def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue):
                 continue 
 
             turned_patches_total = []
-
             x_pred, shape = loadPredictData([path], config, ps)
 
 
@@ -831,6 +832,7 @@ def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue):
             # turned_patches = tf.constant(turned_patches)
         
             outputqueue.put((path, turned_patches, shape))
+            counter += 1
     except Exception as e:
         errorQueue.put(traceback.format_exc())
         raise e
@@ -913,7 +915,6 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                         tf.keras.backend.clear_session()
                         return
                     continue
-
 
                 turned_patches = tf.convert_to_tensor(turned_patches)
 

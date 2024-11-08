@@ -137,7 +137,6 @@ def get_thickness_from_profile(orig_profile, middle_idx, min_thickness, max_thic
     window = signal.windows.gaussian(window_size, sigma)
     padded_profile = np.concatenate([np.ones((window_size - 1) // 2)* orig_profile[0], orig_profile, np.ones((window_size - 1) // 2)* orig_profile[-1]])
     profile = signal.convolve(padded_profile, window/window.sum(), "valid")
-    
     neg_peaks, _ = signal.find_peaks(profile, distance=min_thickness/2, )
 
 
@@ -198,7 +197,6 @@ def create_distance_map(membrane, ratio, membrane_image, micrograph_pixel_size, 
     cropped_segmentation = membrane_image[y_min:y_max, x_min:x_max]
 
     cropped_skeleton = np.zeros_like(cropped_segmentation)
-
     cropped_skeleton[interp_y.astype(np.int32), interp_x.astype(np.int32)] = 1
 
     cropped_skeleton = skeletonize(cropped_skeleton)
@@ -352,7 +350,7 @@ def getThicknessEstimation(distance_idxs, bins, original_values, min_thickness, 
     zero_idx = nr_of_spline_points / len(distances) * zero_idx
 
 
-    result = get_thickness_from_profile(profile, zero_idx, min_thickness, max_thickness, precision)
+    result = get_thickness_from_profile(profile, zero_idx, min_thickness, max_thickness, precision, save_str)
 
     return result, zero_idx, profile
 

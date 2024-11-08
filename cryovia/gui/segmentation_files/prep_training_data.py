@@ -292,8 +292,10 @@ def solveLayer(layer):
     labels, num_features = label(layer, np.ones((3,3), dtype=np.int8),)
     if num_features == 1:
         return np.expand_dims(labels,0)
+    if num_features == 0:
+        return np.expand_dims(labels,0)
     new_stack = []
-    for label_counter in range(0,num_features + 1):
+    for label_counter in range(1,num_features + 1):
         label_image = (labels == label_counter) * 1
         new_stack.append(label_image)
     return np.array(new_stack)
@@ -408,7 +410,8 @@ def resizeSegmentation(image, shape):
     resized_segmentation : the resized segmentation
     """
     
-    
+    if isinstance(image, np.ndarray):
+        return resize(image, shape,0)
     return resize(image.todense(), shape, 0)
     
 
@@ -445,22 +448,24 @@ def load_segmentation_files(paths, config,stepSize=None, get_shapes=False, seg_p
     for path_counter, path in enumerate(paths):
         patches = []
         stack_data,_ = load_file(path)
+
         stack_data = create_3d_stack(stack_data)
- 
-        if config.thin_segmentation:
-            
-            stack_data = np.array([createDilatedSkeleton(layer, config.dilation) for layer in stack_data])
-            p
-        stack_data = (np.sum(stack_data,0) > 0) * 1
+
+
+        
         if seg_pix[path_counter] is not None:
             ps = config.pixel_size
             ratio = seg_pix[path_counter] / ps
-            new_shape = [int(s*ratio) for s in stack_data.shape]
-            stack_data = resizeSegmentation(stack_data, new_shape)
+            new_shape = [int(s*ratio) for s in stack_data.shape[1:]]
 
+            stack_data = np.array([resizeSegmentation(layer, new_shape) for layer in stack_data])
+        
+        if config.thin_segmentation:
+            
+            stack_data = np.array([createDilatedSkeleton(layer, config.dilation) for layer in stack_data])
+        
+        stack_data = (np.sum(stack_data,0) > 0) * 1
         shapes.append(stack_data.shape)
-
-
 
         for i in range(0,stack_data.shape[0],step):
             for j in range(0,stack_data.shape[1],step):
@@ -684,8 +689,8 @@ class customDatasetForPerformance(Sequence):
                     
                     segmentation_patches, micro_patches = a.createImprovedSegmentation(self.config, stepSize=stepSize)
                 else:
-                    if seg_pixel_sizes is not None and counter in seg_pixel_sizes:
-                        seg_pix = seg_pixel_sizes[counter]
+                    if seg_pixel_sizes is not None and seg in seg_pixel_sizes:
+                        seg_pix = seg_pixel_sizes[seg]
                     else:
                         seg_pix = None
                     if image_pixel_sizes is not None and micro in image_pixel_sizes:
@@ -805,16 +810,29 @@ def getTrainingDataForPerformance(micrographs, segmentations, config, print_func
     number_of_files = len(micrographs)
     # if seg_pixel_sizes is not None:
     #     seg_pixel_sizes = np.array(seg_pixel_sizes)
-    valid_micrographs = micrographs[int(number_of_files * validation_start):int(number_of_files * validation_end)]
-    valid_segmentations = segmentations[int(number_of_files * validation_start):int(number_of_files * validation_end)]
+    valid_start = int(number_of_files * validation_start)
+    valid_end = int(number_of_files * validation_end)
+    if np.abs(valid_end - valid_start) == 0:
+        valid_end = valid_start + 1
+    valid_micrographs = micrographs[valid_start:valid_end ]
+    valid_segmentations = segmentations[valid_start:valid_end]
     
 
-    train_micrographs = micrographs[0:int(number_of_files * validation_start)]
-    train_micrographs.extend(micrographs[int(number_of_files * validation_end):])
+    train_micrographs = micrographs[0:valid_start]
+    train_micrographs.extend(micrographs[valid_end:])
+
+    train_segmentations = segmentations[0:valid_start]
+    train_segmentations.extend(segmentations[valid_end:])
+
     if seg_pixel_sizes is not None:
-        train_seg_pixel_sizes = seg_pixel_sizes[0:int(number_of_files * validation_start)]
-        train_seg_pixel_sizes.extend(train_seg_pixel_sizes[int(number_of_files * validation_end):])
-        valid_seg_pixel_sizes = seg_pixel_sizes[int(number_of_files * validation_start):int(number_of_files * validation_end)]
+        train_seg_pixel_sizes = {i:seg_pixel_sizes[i] for i in train_segmentations}
+        valid_seg_pixel_sizes = {i:seg_pixel_sizes[i] for i in valid_segmentations}
+        # train_seg_pixel_sizes = seg_pixel_sizes[0:valid_start]
+        # train_seg_pixel_sizes.extend(seg_pixel_sizes[valid_end:])
+        # valid_seg_pixel_sizes = seg_pixel_sizes[valid_start:valid_end]
+        # train_seg_pixel_sizes = seg_pixel_sizes[0:int(number_of_files * validation_start)]
+        # train_seg_pixel_sizes.extend(train_seg_pixel_sizes[int(number_of_files * validation_end):])
+        # valid_seg_pixel_sizes = seg_pixel_sizes[int(number_of_files * validation_start):int(number_of_files * validation_end)]
     else:
         train_seg_pixel_sizes = None
         valid_seg_pixel_sizes = None
@@ -822,8 +840,8 @@ def getTrainingDataForPerformance(micrographs, segmentations, config, print_func
 
 
 
-    train_segmentations = segmentations[0:int(number_of_files * validation_start)]
-    train_segmentations.extend(segmentations[int(number_of_files * validation_end):])
+    # train_segmentations = segmentations[0:int(number_of_files * validation_start)]
+    # train_segmentations.extend(segmentations[int(number_of_files * validation_end):])
 
     
     train_dataset = customDatasetForPerformance(train_micrographs, train_segmentations, batch_size, config, path, "Train", toStop=toStop,njobs=njobs, seg_pixel_sizes=train_seg_pixel_sizes, image_pixel_sizes=image_pixel_sizes, useAll=True)
@@ -887,7 +905,7 @@ def save_file(filename:Path, data, pixel_size):
                 data = np.sum(data, 0)
             
             data = (data > 0) * 255
-            data = data.astype(np.int8)
+            data = data.astype(np.uint8)
 
             
         Image.fromarray(data).save(filename,)
@@ -1005,8 +1023,8 @@ def load_micrographs_files(paths, config, prep=False, per_file=False, get_shapes
                 # shape = [int(s * pixel_size / config.pixel_size) for s in mrc_data.shape[::-1]]
                 shape = [int(s * pixel_size / config.pixel_size) for s in mrc_data.shape]
                 # mrc_data = cv2.resize(mrc_data, shape,interpolation=cv2.INTER_CUBIC )
+  
                 mrc_data = fft_rescale_image(mrc_data, shape)
-
         for i in range(0,mrc_data.shape[0],step):
             for j in range(0,mrc_data.shape[1],step):
                 if i + image_size > mrc_data.shape[0]:
