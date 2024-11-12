@@ -3,7 +3,51 @@ For usage see [Usage](How_to_use.md)
 
 # Installation
 
+
+
+
+
 ## Linux
+
+## Without conda
+
+### Creating directories
+```mkdir CryoViaInstallation```
+
+```cd CryoViaInstallation```
+
+```git clone https://github.com/philipp-schoennenbeck/CryoVia```
+
+```git clone https://github.com/philipp-schoennenbeck/GridEdgeDetector```
+
+
+### Creating python environment
+
+Make sure you have ```python 3.9``` installed.
+
+```python3.9 -m venv /path/to/venv/name_of_venv```
+
+```source /path/to/venv/name_of_venv/bin/activate```
+
+### Installing tensorflow
+
+```pip install tensorflow[and-cuda]```
+
+
+### Verifying tensorflow install
+```python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"```
+
+### Installing CryoVia
+```cd CryoVia```
+
+```pip install .```
+
+### Install GridEdgeDetector
+```cd ../GridEdgeDetector```
+
+```pip install .```
+
+## With conda
 
 ### Creating directories
 ```mkdir CryoViaInstallation```
@@ -84,3 +128,6 @@ For usage see [Usage](How_to_use.md)
 ```cd ../GridEdgeDetector```
 
 ```pip install .```
+
+
+

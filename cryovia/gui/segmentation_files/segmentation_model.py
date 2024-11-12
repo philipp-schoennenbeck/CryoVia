@@ -691,7 +691,6 @@ class segmentationModel:
             gpu = get_logical_devices()
         if isinstance(gpu, str):
             gpu = [gpu]
-
         to_mask = False
         if kwargs["run"]["maskGrid"]:
             if "remove_segmentation_on_edge" in kwargs["maskGrid"] and kwargs["maskGrid"]["remove_segmentation_on_edge"]:
@@ -716,8 +715,11 @@ class segmentationModel:
         
         loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config, errorQueue, idx)) for idx in range(number_of_loader_proccesses)]
 
-
-        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue )) for gpu_idx in range(len(gpu))]
+        if "CUDA_VISIBLE_DEVICES" in os.environ:
+            visible = os.environ["CUDA_VISIBLE_DEVICES"]
+        else:
+            visible = None
+        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue, visible )) for gpu_idx in range(len(gpu))]
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
         unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path,errorQueue)) for _ in range(number_of_unpatchifyer_procceses)]
@@ -838,11 +840,17 @@ def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx)
         raise e
 import time
 
-def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue ):
+def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue, visible ):
     counter = 0
     try:
+        
+        if visible is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = visible
 
-        os.environ["CUDA_VISIBLE_DEVICES"]=str(gpu_idx)   
+        else:
+            pass
+            # visible = str(gpu_idx)
+            # os.environ["CUDA_VISIBLE_DEVICES"] = visible    
         gpu = gpus[gpu_idx] 
         import tensorflow as tf
 

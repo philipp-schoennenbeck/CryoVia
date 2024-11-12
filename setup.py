@@ -26,13 +26,15 @@ setup(
     ]
     ,
     install_requires=[
-        'numpy==1.24.1',
+        # 'numpy==1.24.1',
+        "numpy",
         'mrcfile',
         'scipy',
         'opencv-python',
         # 'sknw==0.13',
         'napari[all]==0.4.19',
-        'matplotlib==3.8.3',
+        # 'matplotlib==3.8.3',
+        "matplotlib",
         "pandas",
         "pyqtgraph",
         "qimage2ndarray",

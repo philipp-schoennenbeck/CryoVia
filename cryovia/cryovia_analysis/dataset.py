@@ -459,6 +459,7 @@ class Dataset:
         if len(to_segment) > 0:
             if gpu is None:
                 gpu = get_logical_devices("GPU")
+
                 if len(gpu) == 0:
                     gpu = get_logical_devices("CPU")
             pixelSizes = [self.pixelSizes[m] if m in self.pixelSizes else None for m in to_segment ]

@@ -12,6 +12,7 @@ from traceback import format_exception
 
 import click
 import multiprocessing as mp
+
 if os.name == 'nt':
     pathlib.PosixPath = pathlib.WindowsPath
 
@@ -380,6 +381,23 @@ def changeToDebug():
     os.environ["CRYOVIA_MODE"] = "1"
 
 
+
+
+
+def logical_process(pipe, device="GPU"):
+    import tensorflow as tf
+    pipe.send(tf.config.list_logical_devices(device))
+
+def get_logical_devices(device="GPU"):
+    global MP_START_METHOD
+    con1, con2 = mp.get_context("spawn").Pipe()
+    process = mp.get_context("spawn").Process(target=logical_process, args=[con1, device])
+    process.start()
+    result = con2.recv()
+    return result
+
+
+
 @click.command()
 @click.option("-n", "--njobs", help="Number of njobs to load in and save files. For analysing you can specify other values in the GUI. Default is number of cores/2.",
                type=click.IntRange(1,mp.cpu_count(),clamp=True), default=max(1, mp.cpu_count() // 2))
@@ -399,7 +417,6 @@ def startGui(njobs, gpus, debug):
     """
     if debug:
         changeToDebug()
-
     if gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(i) for i in gpus])
     os.environ["CRYOVIA_NJOBS"] = str(njobs)
