@@ -326,50 +326,99 @@ def create_3d_stack(data):
 
 
 
-def fft_rescale_image(image, new_size):
+def fft_rescale_image(image, new_shape):
     """
-    Rescales an image using cropping in fourier space 
-    Parameters
-    ----------
-    image       : the image to rescale
-    new_size    : the size to rescale the image to
+    Rescale a grayscale image to a new shape using Fourier cropping or padding.
 
-    Returns
-    -------
-    rescaled_image : the rescaled image
+    Parameters:
+    - image: 2D numpy array representing the grayscale image.
+    - new_shape: Tuple (new_height, new_width) representing the desired output shape.
+
+    Returns:
+    - Rescaled image as a 2D numpy array.
     """
-    
-    old_size = np.array(image.shape)
-    
-    rescale_factor = old_size[0] / new_size[0]
-    
-    fft_image = np.fft.fftshift(np.fft.fft2(image))
-    if rescale_factor > 1:
-        difference = (old_size - new_size)
-        to_add_x = 0
-        to_add_y = 0
-        if difference[0] % 2 == 1:
-            to_add_y = -1
-        if difference[1] % 2 == 1:
-            to_add_x = -1
+    # Perform Fourier Transform
+    f_transform = np.fft.fft2(image)
+    f_transform_shifted = np.fft.fftshift(f_transform)
 
-        difference = (difference/2).astype(np.int32)
-        fft_image = fft_image[difference[0] - to_add_y:-difference[0], difference[1]- to_add_x:-difference[1] ]
+    # Get the center of the original Fourier transform
+    original_shape = image.shape
+    center_y, center_x = original_shape[0] // 2, original_shape[1] // 2
 
-    else:
-        difference = (new_size - old_size)
-        to_add_x = 0
-        to_add_y = 0
-        if difference[0] % 2 == 1:
-            to_add_y = 1
-        if difference[1] % 2 == 1:
-            to_add_x = 1
-        difference = (difference/2).astype(np.int32)
-        pad = [(difference[0], difference[0] + to_add_y),(difference[1], difference[1]+ to_add_x)]
-        fft_image = np.pad(fft_image,pad, mode="constant", constant_values=0)
-    
-    rescaled_image = np.real(np.fft.ifft2(np.fft.ifftshift(fft_image)))
+    # Determine new cropping/padding sizes
+    new_height, new_width = new_shape
+    half_new_height, half_new_width = new_height // 2, new_width // 2
+
+    # Create an empty Fourier domain with the new shape
+    resized_f_transform = np.zeros(new_shape, dtype=complex)
+
+    # Define bounds for cropping/padding in the Fourier domain
+    y1 = max(0, center_y - half_new_height)
+    y2 = min(original_shape[0], center_y + half_new_height + new_height % 2)
+    x1 = max(0, center_x - half_new_width)
+    x2 = min(original_shape[1], center_x + half_new_width + new_width % 2)
+
+    y1_new = max(0, half_new_height - center_y)
+    y2_new = y1_new + (y2 - y1)
+    x1_new = max(0, half_new_width - center_x)
+    x2_new = x1_new + (x2 - x1)
+
+    # Copy the relevant portion of the Fourier transform or pad with zeros
+    resized_f_transform[y1_new:y2_new, x1_new:x2_new] = f_transform_shifted[y1:y2, x1:x2]
+
+    # Perform inverse Fourier transform
+    resized_f_transform = np.fft.ifftshift(resized_f_transform)
+    rescaled_image = np.fft.ifft2(resized_f_transform).real
+
+    # Normalize the image to the original range
     return rescaled_image
+
+
+
+# def fft_rescale_image(image, new_size):
+#     """
+#     Rescales an image using cropping in fourier space 
+#     Parameters
+#     ----------
+#     image       : the image to rescale
+#     new_size    : the size to rescale the image to
+
+#     Returns
+#     -------
+#     rescaled_image : the rescaled image
+#     """
+    
+#     old_size = np.array(image.shape)
+    
+#     rescale_factor = old_size[0] / new_size[0]
+    
+#     fft_image = np.fft.fftshift(np.fft.fft2(image))
+#     if rescale_factor > 1:
+#         difference = (old_size - new_size)
+#         to_add_x = 0
+#         to_add_y = 0
+#         if difference[0] % 2 == 1:
+#             to_add_y = -1
+#         if difference[1] % 2 == 1:
+#             to_add_x = -1
+
+#         difference = (difference/2).astype(np.int32)
+#         fft_image = fft_image[difference[0] - to_add_y:-difference[0], difference[1]- to_add_x:-difference[1] ]
+
+#     else:
+#         difference = (new_size - old_size)
+#         to_add_x = 0
+#         to_add_y = 0
+#         if difference[0] % 2 == 1:
+#             to_add_y = 1
+#         if difference[1] % 2 == 1:
+#             to_add_x = 1
+#         difference = (difference/2).astype(np.int32)
+#         pad = [(difference[0], difference[0] + to_add_y),(difference[1], difference[1]+ to_add_x)]
+#         fft_image = np.pad(fft_image,pad, mode="constant", constant_values=0)
+    
+#     rescaled_image = np.real(np.fft.ifft2(np.fft.ifftshift(fft_image)))
+#     return rescaled_image
 
 
 def preprocess(data):
@@ -570,6 +619,7 @@ def unpatchify(patches,image_shape, config, threshold=True, both=False,):
             
 
     if both:
+
         prediction = np.argmax(image, -1)
         confidence = image[..., 1] / np.sum(image, -1)
         return prediction, confidence
@@ -1013,6 +1063,8 @@ def load_micrographs_files(paths, config, prep=False, per_file=False, get_shapes
             sig = int(config.high_pass_filter / pixel_size)
             sig += (sig + 1) % 2
             mrc_data = gaussian_filter(mrc_data,0,pixel_size) - gaussian_filter(mrc_data,sig,pixel_size)
+
+
         if prep is not None:
             mrc_data = preprocess(mrc_data)
         if resize:
