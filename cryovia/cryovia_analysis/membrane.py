@@ -281,6 +281,26 @@ class Membrane(dict):
         image.thumbnail((200,200))
         return image
 
+
+    def getCroppedImage(self, buffer=20):
+        
+        
+        y,x = self.coords.T
+
+        y_min = max(0, np.min(y) - buffer)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + buffer)
+
+        x_min = max(0, np.min(x) - buffer)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + buffer)
+
+        image = self.analyser.getResizedMicrograph()[y_min:y_max + 1, x_min:x_max + 1]
+        image -= np.min(image)
+        image /= np.max(image)
+        image *= 255
+        image = Image.fromarray(np.uint8(image))
+
+        return image
+
     @property
     def croppedImage(self):
         

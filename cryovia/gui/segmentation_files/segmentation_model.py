@@ -45,6 +45,9 @@ from keras.callbacks import Callback
 
 
 def logical_process(pipe, device="GPU"):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     import tensorflow as tf
     pipe.send(tf.config.list_logical_devices("GPU"))
 
@@ -511,7 +514,7 @@ class segmentationModel:
 
     @property
     def lockedIn(self):
-        return (self.config.save_dir / "best_weights.h5").exists()
+        return (self.config.save_dir / "best.weights.h5").exists()
 
     def createCustomCallbacks(self):
         starting_epoch = self.epochs
@@ -552,8 +555,8 @@ class segmentationModel:
         
         self.print(new_copy.name)
         new_copy.save()
-        if (self.config.save_dir / "best_weights.h5").exists():
-            shutil.copy((self.config.save_dir / "best_weights.h5"), new_copy.config.save_dir / "best_weights.h5")
+        if (self.config.save_dir / "best.weights.h5").exists():
+            shutil.copy((self.config.save_dir / "best.weights.h5"), new_copy.config.save_dir / "best.weights.h5")
             
         return new_copy
         
@@ -573,8 +576,12 @@ class segmentationModel:
             eps_scale=self.config.eps_scale,
         )
         if self.config.save_dir is not None:
-            if not (Path(self.config.save_dir) / "best_weights.h5").exists() or overwrite:
-                model.save_weights((Path(self.config.save_dir) / "best_weights.h5"))
+            if (Path(self.config.save_dir) / "best_weights.h5").exists() and not (Path(self.config.save_dir) / "best.weights.h5").exists() and not overwrite:
+                model.load_weights(Path(self.config.save_dir) / "best_weights.h5")
+                model.save_weights(Path(self.config.save_dir) / "best.weights.h5")
+
+            if not (Path(self.config.save_dir) / "best.weights.h5").exists() or overwrite:
+                model.save_weights((Path(self.config.save_dir) / "best.weights.h5"))
         else:
             self.print("Savedir in config is None")
         return model
@@ -588,7 +595,7 @@ class segmentationModel:
             callbacks.append(ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=10))
         callbacks.append(EarlyStopping(patience=10))
         callbacks.append(
-                ModelCheckpoint(str(Path(self.config.save_dir) / "best_weights.h5"), save_best_only=True,
+                ModelCheckpoint(str(Path(self.config.save_dir) / "best.weights.h5"), save_best_only=True,
                                 save_weights_only=True, monitor="val_loss", mode="min"))
 
         # callbacks.extend(self.createCustomCallbacks())
@@ -610,14 +617,21 @@ class segmentationModel:
 
         model = self.build_model()
         if loaddir is None:
-            if self.config.save_dir is not None and (Path(self.config.save_dir) / "best_weights.h5").exists():
-                loaddir = (Path(self.config.save_dir) / "best_weights.h5")
+            
+            if self.config.save_dir is not None and (Path(self.config.save_dir) / "best.weights.h5").exists():
+                loaddir = (Path(self.config.save_dir) / "best.weights.h5")
+            elif self.config.save_dir is not None and (Path(self.config.save_dir) / "best_weights.h5").exists():
+                model.load_weights(model.load_weights(Path(self.config.save_dir) / "best_weights.h5"))
+                model.save_weights(Path(self.config.save_dir) / "best.weights.h5")
+                loaddir = Path(self.config.save_dir) / "best.weights.h5"
+                print(f"Moved old segmentation weights from {self.name} model.")
+                
             else:
                 return None
         if loaddir.exists():
-                       
-            # self.model.load_weights(str(Path(self.config.save_dir) / "best_weights.h5"))
+            
             model.load_weights(loaddir)
+            
         return model   
         
 
@@ -664,7 +678,7 @@ class segmentationModel:
 
     @property
     def writable(self):
-        return self.name != "Default" and self.name != "Default_thin" 
+        return self.name != "Default" and self.name != "Default_thin" and self.name != "Default_tomogram_slices" 
 
     def __str__(self) -> str:
         return self.name
@@ -719,6 +733,7 @@ class segmentationModel:
             visible = os.environ["CUDA_VISIBLE_DEVICES"]
         else:
             visible = None
+        self.load()
         predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue, visible )) for gpu_idx in range(len(gpu))]
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
@@ -804,7 +819,9 @@ def normalize(x):
 
 
 def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx):
-    
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     # import tensorflow as tf
     # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     # # tf.config.set_visible_devices([], 'GPU')
@@ -841,7 +858,12 @@ def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx)
 import time
 
 def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue, visible ):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     counter = 0
+    
+
     try:
         
         if visible is not None:
@@ -914,6 +936,7 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                     break
 
             tf.keras.backend.clear_session()
+            output_counter = 0
             while True:
                 prediction = []
                 try:
@@ -931,6 +954,7 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                     gc.collect()
 
                 prediction = np.concatenate(prediction)
+
                 outputqueue.put((path, prediction, shape))
     except Exception as e:
         tf.keras.backend.clear_session()
@@ -939,6 +963,9 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
 
 
 def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_path, mask_path, errorQueue):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     counter = 0
     try:
         while True:

@@ -1,12 +1,81 @@
+# # Standard library imports
+# import copy
+# import datetime
+# import math
+# import os
+# import sys
+# import traceback
+# from collections import OrderedDict
+# from io import BytesIO, TextIOWrapper
+# from pathlib import Path
+# from queue import Queue
+# import typing
+# from typing import IO
+
+# # Third-party library imports - Scientific/Data
+# import matplotlib
+# matplotlib.use('Qt5Agg')
+# from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+# from matplotlib.figure import Figure
+# import mrcfile
+# import numpy as np
+# import pandas as pd
+# from PIL import Image
+# import qimage2ndarray as q2n
+# import seaborn as sns
+# import sparse
+# from scipy.ndimage import binary_fill_holes, label
+# from cv2 import circle
+
+# # Third-party library imports - Qt/PyQt
+# from PyQt5 import QtCore, QtGui
+# from PyQt5.QtCore import (
+#     QAbstractItemModel, QEvent, QItemSelection, QItemSelectionModel, 
+#     QRegExp, QSize, QTimer, Qt, pyqtSlot, QAbstractTableModel
+# )
+# from PyQt5.QtGui import (
+#     QColor, QDoubleValidator, QFont, QIcon, QIntValidator, 
+#     QKeySequence, QMouseEvent, QPixmap, QRegExpValidator, 
+#     QValidator, QWheelEvent
+# )
+# from PyQt5.QtWidgets import (
+#     QAbstractItemView, QAbstractScrollArea, QAction, QApplication, 
+#     QButtonGroup, QCheckBox, QComboBox, QDesktopWidget, QDialog, 
+#     QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, 
+#     QItemDelegate, QLabel, QLineEdit, QListView, QListWidget, 
+#     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPushButton, 
+#     QRadioButton, QScrollArea, QShortcut, QSizePolicy, QSpinBox, 
+#     QSplitter, QStyle, QStyleOptionViewItem, QStyledItemDelegate, 
+#     QTabWidget, QTableView, QTextEdit, QToolButton, QToolTip, 
+#     QTreeView, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+# )
+
+# # Multiprocessing
+# import multiprocessing as mp
+
+# # Project-specific imports
+# from cryovia.cryovia_analysis.analyser import Analyser, AnalyserWrapper
+# from cryovia.cryovia_analysis.custom_utils import resizeMicrograph
+# from cryovia.cryovia_analysis.dataset import (
+#     DEFAULT_CONFIGS, Dataset, dataset_factory, 
+#     get_all_dataset_names, get_all_dataset_paths
+# )
+# from cryovia.gui.segmentation_files.prep_training_data import load_file
+# from cryovia.gui.shape_classifier_gui import *
+# # from cryovia.gui.membrane_segmentation import *
+# from grid_edge_detector.image_gui import CorrectDoubleValidator
+
+
 
 import sys
 from typing import IO
 from PyQt5.QtWidgets import QApplication, QStyleOptionViewItem, QTableView, QTabWidget,QVBoxLayout, QWidget, QHBoxLayout, QPushButton, QGridLayout, QLabel, QLineEdit, QTextEdit, QAbstractItemView,QStyle, QComboBox, QFileDialog, QScrollArea, QAbstractScrollArea, QSplitter
 from PyQt5.QtWidgets import QListView, QTreeView, QItemDelegate, QMainWindow, QToolButton, QDialog, QFrame, QListWidgetItem, QListWidget, QMessageBox, QCheckBox, QGroupBox, QSizePolicy, QShortcut, QStyledItemDelegate, QTreeWidget, QTreeWidgetItem
-from PyQt5.QtWidgets import QMenu, QAction, QDesktopWidget, QToolTip
-from PyQt5.QtCore import QAbstractTableModel, Qt, QSize, QItemSelectionModel, QItemSelection, QTimer, QEvent,QAbstractItemModel
-from PyQt5.QtGui import QPixmap, QColor, QIntValidator, QDoubleValidator, QIcon, QValidator,QKeySequence, QWheelEvent, QMouseEvent, QFont
+from PyQt5.QtWidgets import QMenu, QAction, QDesktopWidget, QToolTip, QRadioButton, QButtonGroup, QSpinBox
+from PyQt5.QtCore import QAbstractTableModel, Qt, QSize, QItemSelectionModel, QItemSelection, QTimer, QEvent,QAbstractItemModel, QRegExp, pyqtSlot
+from PyQt5.QtGui import QPixmap, QColor, QIntValidator, QDoubleValidator, QIcon, QValidator,QKeySequence, QWheelEvent, QMouseEvent, QFont, QRegExpValidator
 from PyQt5 import QtCore, QtGui
+
 import math
 import qimage2ndarray as q2n
 import sparse
@@ -25,7 +94,7 @@ from cv2 import circle
 # from cryovia.gui.membrane_segmentation import * 
 import pandas as pd
 from scipy.ndimage import label
-
+import os
 from cryovia.cryovia_analysis.dataset import Dataset, get_all_dataset_names, dataset_factory, get_all_dataset_paths, DEFAULT_CONFIGS
 from cryovia.gui.segmentation_files.prep_training_data import load_file
 import seaborn as sns
@@ -38,6 +107,11 @@ import copy
 import multiprocessing as mp
 import datetime
 from PIL import Image
+
+
+import mrcfile
+import numpy as np
+from pathlib import Path
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
 except:
@@ -1203,6 +1277,779 @@ class DatasetListWidget(QListWidget):
             dataset = item.dataset
             infowidget.loadDatasetInfo(dataset)
 
+
+
+
+def generate_format_string():
+    # Get current date and time
+    now = datetime.datetime.now()
+    
+    # Extract components
+    year = now.year
+    month = now.month
+    day = now.day
+    
+    # Calculate seconds since the start of the day
+    seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
+    # Format the string according to XXXXYYZZ_AAAAA pattern
+    formatted_string = f"{year}{month:02d}{day:02d}_{seconds_since_midnight:05d}"
+    
+    return formatted_string
+
+def get_slices(file, slices, arguments):
+    averaged_slices = []
+    slice_indeces = []
+    with mrcfile.open(file, "r", True) as f:
+        data:np.ndarray = f.data * 1
+        for s in slices:
+            s = s - 1
+            if arguments["projection_slices"] == 1:
+                current_indeces = [s]
+            else:
+                buffer = s % 2
+                current_indeces = np.arange(s - arguments["projection_slices"] // 2, s + arguments["projection_slices"] // 2 + buffer)
+            
+            if current_indeces[0] < 0 or current_indeces[-1] >= data.shape[arguments["axis"]]:
+                continue
+            current_slice = data.take(current_indeces, arguments["axis"])
+            current_slice = np.mean(current_slice, arguments["axis"])
+            averaged_slices.append(current_slice)
+            slice_indeces.append(s + 1)
+    return averaged_slices, slice_indeces
+
+
+def create_slice_files(file, arguments, shape, path, ps):
+    if arguments["axis"] == -1:
+        with mrcfile.open(file, "r", True, True) as mrc:
+            # is_volume = mrc.is_volume()
+            ps = mrc.voxel_size["x"]
+            nx = mrc.header.nx  # size along x-axis
+            ny = mrc.header.ny  # size along y-axis
+            nz = mrc.header.nz  # size along z-axis
+            shape = np.array((nz,ny,nx))
+            arguments["axis"] = np.argmin(shape)
+
+
+    if arguments["mode"] == "automatic":
+        slice_indices = np.arange(arguments["params"]["Slice buffer"], shape[arguments["axis"]] - arguments["params"]["Slice buffer"], arguments["params"]["Slice interval"])
+    else:
+        slice_indices = arguments["slices"]
+    slices, slice_indices = get_slices(file, slice_indices, arguments)
+    
+    name = Path(file).stem
+    date = generate_format_string()
+
+    path = Path(path) / f"tomo_slicer_{date}"
+    path.mkdir(parents=True, exist_ok=True)
+    filenames = []
+    ps = 13.424
+    
+    for s, s_idx in zip(slices, slice_indices):
+        filename = path / f"{name}_{s_idx}.mrc"
+        
+        with mrcfile.new(filename, s.astype(np.float32), overwrite=True) as f:
+            f.voxel_size = ps
+        filenames.append(filename)
+    return filenames
+
+
+
+
+
+class MrcFileSelector(QWidget):
+    def __init__(self, dataset):
+        super().__init__()
+        self.selected_files = []
+        self.slice_min_value = 0
+        self.slice_max_value = 999
+        self.axis = -1
+        self.depths = {}
+        self.shapes = {}
+        self.ps = {}
+        self.dataset:Dataset = dataset
+        self.init_ui()
+        
+    def init_ui(self):
+        # Set window title and size
+        self.setWindowTitle('MRC File Selector')
+        self.resize(600, 700)
+        
+        # Create main layout
+        main_layout = QVBoxLayout()
+        
+        # Add header text
+        header_label = QLabel("MRC File Selection Tool")
+        header_label.setStyleSheet("font-size: 16pt; font-weight: bold; margin-bottom: 10px;")
+        header_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(header_label)
+        
+        # Add description text
+        description_label = QLabel("Select one or multiple MRC files for processing")
+        description_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(description_label)
+        
+        # Add separator line
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        main_layout.addWidget(line)
+        
+        # Create button to open file dialog
+        self.select_button = QPushButton("Select MRC Files")
+        self.select_button.setMinimumHeight(40)
+        self.select_button.clicked.connect(self.open_file_dialog)
+        main_layout.addWidget(self.select_button)
+        
+        # Add label to show number of selected files
+        self.file_count_label = QLabel("No files selected")
+        self.file_count_label.setAlignment(Qt.AlignCenter)
+        self.file_count_label.setStyleSheet("font-size: 12pt; margin-top: 15px;")
+        main_layout.addWidget(self.file_count_label)
+        
+        # Add separator line
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.HLine)
+        line2.setFrameShadow(QFrame.Sunken)
+        main_layout.addWidget(line2)
+
+
+        self.label = QLabel("Slice plane")
+        main_layout.addWidget(self.label)
+        
+        # Create a horizontal layout for radio buttons and combo box
+        radio_layout = QHBoxLayout()
+        
+        # Create button group to manage radio buttons
+        self.button_group = QButtonGroup(self)
+        
+        # Create first radio button
+        self.smallest_plane_radio = QRadioButton("Smallest plane")
+        self.button_group.addButton(self.smallest_plane_radio, 1)
+        radio_layout.addWidget(self.smallest_plane_radio)
+        
+        # Create second radio button with combo box
+        self.specific_plane_radio = QRadioButton("Specific plane")
+        self.button_group.addButton(self.specific_plane_radio, 2)
+        radio_layout.addWidget(self.specific_plane_radio)
+        
+        # Create and add combo box
+        self.plane_combo = QComboBox()
+        self.plane_combo.addItems(["z", "y", "x"])
+        self.plane_combo.setEnabled(False)  # Initially disable
+
+
+        radio_layout.addWidget(self.plane_combo)
+        
+        # Add radio layout to main layout
+        main_layout.addLayout(radio_layout)
+        
+        # Set layout for the widget
+        self.setLayout(main_layout)
+        
+        # Connect signals
+        
+        self.plane_combo.currentIndexChanged.connect(self.on_combo_changed)
+        
+        # Set default selection
+        self.smallest_plane_radio.setChecked(True)
+        self.smallest_plane_radio.toggled.connect(self.on_selection_changed)
+        self.specific_plane_radio.toggled.connect(self.on_selection_changed)
+
+
+                # Add separator line
+        line3 = QFrame()
+        line3.setFrameShape(QFrame.HLine)
+        line3.setFrameShadow(QFrame.Sunken)
+        main_layout.addWidget(line3)
+
+        # Add radio buttons for slicer selection
+
+        radio_layout = QHBoxLayout()
+        
+        self.slicer_group = QButtonGroup(self)
+        self.auto_radio = QRadioButton("Automatic tomogram slicer")
+        self.manual_radio = QRadioButton("Manual tomogram slicer")
+        
+        self.auto_radio.setChecked(True)
+        
+        self.slicer_group.addButton(self.auto_radio)
+        self.slicer_group.addButton(self.manual_radio)
+        
+        radio_layout.addWidget(self.auto_radio)
+        radio_layout.addWidget(self.manual_radio)
+        
+        main_layout.addLayout(radio_layout)
+        
+        # Create container for panels with fixed size
+        self.panel_container = QWidget()
+        self.panel_container.setMinimumHeight(300)  # Set minimum height to prevent jumping
+        panel_container_layout = QVBoxLayout(self.panel_container)
+        panel_container_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create stacked panels for the two different options
+        self.create_auto_slicer_panel()
+        self.create_manual_slicer_panel()
+        
+        # Add panels to container
+        panel_container_layout.addWidget(self.auto_panel)
+        panel_container_layout.addWidget(self.manual_panel)
+        
+        # Add container to main layout
+        main_layout.addWidget(self.panel_container)
+        
+        # Add projection slices parameter (common to both modes)
+        proj_layout = QHBoxLayout()
+        self.proj_slices_label = QLabel("Number of slices for projection:")
+        self.proj_slices_spinbox = QSpinBox()
+        self.proj_slices_spinbox.setMinimum(1)
+        self.proj_slices_spinbox.setMaximum(100)
+        self.proj_slices_spinbox.setValue(10)
+        
+        proj_layout.addWidget(self.proj_slices_label)
+        proj_layout.addWidget(self.proj_slices_spinbox)
+        proj_layout.addStretch()
+        
+        main_layout.addLayout(proj_layout)
+        
+        # Connect radio buttons to panel switching
+        self.auto_radio.toggled.connect(self.toggle_panels)
+        
+        # Initially show the automatic panel
+        self.toggle_panels()
+        
+
+
+
+    
+
+
+
+
+
+        # Add buttons at the bottom
+        buttons_layout = QHBoxLayout()
+        
+        self.cancel_button = QPushButton("Cancel")
+        self.apply_button = QPushButton("Apply")
+        
+        # Set minimum size for buttons
+        self.cancel_button.setMinimumSize(100, 30)
+        self.apply_button.setMinimumSize(100, 30)
+        self.apply_button.clicked.connect(self.get_slice_data)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.cancel_button)
+        buttons_layout.addWidget(self.apply_button)
+        
+        main_layout.addLayout(buttons_layout)
+        
+        # Connect button signals
+        self.cancel_button.clicked.connect(self.close)
+        
+        # Set the main layout
+        self.setLayout(main_layout)
+
+
+
+    def on_selection_changed(self):
+        """Handle when radio button selection changes"""
+        # Enable or disable combo box based on which radio is selected
+        self.plane_combo.setEnabled(self.specific_plane_radio.isChecked())
+        
+        # Get current selection
+        if self.smallest_plane_radio.isChecked():
+            selected_option = "smallest_plane"
+            self.axis = -1
+        else:
+            selected_option = "specific_plane"
+            axis = self.plane_combo.currentText()
+            self.axis = {"z":0, "y":1,"x":2}[axis]
+        self.update_file_info()
+
+        
+    
+    def on_combo_changed(self, index):
+        """Handle when combo box selection changes"""
+        self.on_selection_changed()
+
+    def create_auto_slicer_panel(self):
+        """Create the panel for automatic tomogram slicer"""
+        self.auto_panel = QWidget()
+        layout = QGridLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Add parameters for automatic slicer
+        params = [
+            ("Slice interval", 10, 1, 9999999),
+            ("Slice buffer", 10,0, 9999999)
+            
+        ]
+        
+        self.auto_spinboxes = {}
+        
+        for row, (param_name, default_val, min_val, max_val) in enumerate(params):
+            label = QLabel(f"{param_name}:")
+            spinbox = QSpinBox()
+            spinbox.setMinimum(min_val)
+            spinbox.setMaximum(max_val)
+            spinbox.setValue(default_val)
+            
+            self.auto_spinboxes[param_name] = spinbox
+            
+            layout.addWidget(label, row, 0)
+            layout.addWidget(spinbox, row, 1)
+        
+        # Add stretch at the bottom to push content to the top
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(spacer, len(params), 0, 1, 2)
+        
+
+
+
+
+
+
+        self.auto_panel.setLayout(layout)
+    
+    def create_manual_slicer_panel(self):
+        """Create the scrollable panel for manual tomogram slicer"""
+        self.manual_panel = QScrollArea()
+        self.manual_panel.setWidgetResizable(True)
+        self.manual_panel.setMinimumHeight(300)  # Match minimum height with auto panel
+        
+        # Create a widget to hold the content
+        content_widget = QWidget()
+        self.manual_layout = QVBoxLayout(content_widget)
+        self.manual_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Initial label when no files selected
+        self.no_files_label = QLabel("Please select MRC files first")
+        self.no_files_label.setAlignment(Qt.AlignCenter)
+        self.manual_layout.addWidget(self.no_files_label)
+        
+        # This will store our file input widgets
+        self.file_inputs = {}
+        
+        # Set the content widget
+        self.manual_panel.setWidget(content_widget)
+    
+    def toggle_panels(self):
+        """Show the appropriate panel based on radio button selection"""
+        if self.auto_radio.isChecked():
+            self.auto_panel.setVisible(True)
+            self.manual_panel.setVisible(False)
+        else:
+            self.auto_panel.setVisible(False)
+            self.manual_panel.setVisible(True)
+            
+            # Update manual panel content if files are selected
+            if self.selected_files:
+                self.update_manual_slicer_panel()
+        
+    def open_file_dialog(self):
+        """Open file dialog and handle selected files"""
+        options = QFileDialog.Options()
+        file_dialog = QFileDialog()
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        file_dialog.setNameFilter("MRC Files (*.mrc)")
+        
+        if file_dialog.exec_():
+            self.selected_files = file_dialog.selectedFiles()
+            self.update_file_info()
+            
+    def get_slice_data(self):
+        """Get the slice data from either automatic or manual input"""
+        result = {}
+        projection_slices = self.proj_slices_spinbox.value()
+        
+        if self.auto_radio.isChecked():
+            # Get parameters from auto panel
+            auto_params = {name: spinbox.value() for name, spinbox in self.auto_spinboxes.items()}
+            
+            
+            # Apply same parameters to all files
+            for file_path in self.selected_files:
+                result[file_path] = {
+                    'mode': 'automatic',
+                    'params': auto_params,
+                    'projection_slices': projection_slices,
+                    'axis': self.axis
+                }
+        else:
+            # Get manual slices for each file
+            for file_path, input_field in self.file_inputs.items():
+                slice_text = input_field.text().strip()
+                
+                slice_numbers = self.parse_slice_text(slice_text)
+                
+                result[file_path] = {
+                    'mode': 'manual',
+                    'slices': slice_numbers,
+                    'projection_slices': projection_slices,
+                    'axis': self.axis
+                }
+
+        all_files = []         
+        for file, arguments in result.items():
+            files = create_slice_files(file, arguments, self.shapes[file], self.dataset.dataset_path, self.ps[file])
+            all_files.extend(files)
+        
+        self.dataset.addMicrographPaths(all_files)
+
+        return all_files
+        
+    def parse_slice_text(self, text):
+        """Parse slice text into a list of integers with validation"""
+        if not text:
+            return []
+            
+        slices = []
+        try:
+            # Process each comma-separated part
+            for part in text.split(','):
+                part = part.strip()
+                if not part:
+                    continue
+                    
+                
+                # Handle single values
+                value = int(part)
+                # Validate value is within bounds
+                if self.slice_min_value <= value <= self.slice_max_value:
+                    slices.append(value)
+        except ValueError:
+            # If there's any parsing error, return empty list
+            return []
+            
+        # Remove duplicates and sort
+        return sorted(list(set(slices)))
+    
+    def update_file_info(self):
+        def get_correct_depth(file):
+            with mrcfile.open(file, "r", True, True) as mrc:
+                # is_volume = mrc.is_volume()
+                ps = mrc.voxel_size["x"]
+                nx = mrc.header.nx  # size along x-axis
+                ny = mrc.header.ny  # size along y-axis
+                nz = mrc.header.nz  # size along z-axis
+                shape = np.array((nz,ny,nx))
+                is_volume = np.all(shape > 1)
+                if is_volume:
+                    
+                    if self.axis == -1:
+                        return np.min(shape), shape, ps
+                    else:
+                        return shape[self.axis], shape, ps
+                else:
+                    return None, None, None
+
+        """Update the UI with information about selected files"""
+        valid_files = []
+        self.depths = {}
+        self.shapes = {}
+        self.ps = {}
+        for file in self.selected_files:
+            depth, shape, ps = get_correct_depth(file)
+            if depth is None:
+                continue
+            valid_files.append(file)
+            self.depths[file] = depth
+            self.shapes[file] = shape
+            self.ps[file] = ps
+        num_files = len(valid_files)
+        self.selected_files = valid_files
+        
+        if num_files == 0:
+            self.file_count_label.setText("No valid files selected")
+        else:
+            # Update count label
+            file_text = "file" if num_files == 1 else "files"
+            self.file_count_label.setText(f"{num_files} {file_text} selected")
+            
+        # Update the manual slicer panel if it's visible
+        if self.manual_radio.isChecked():
+            self.update_manual_slicer_panel()
+            
+    def update_manual_slicer_panel(self):
+        """Update the manual slicer panel with input fields for each file"""
+        # Clear existing widgets
+        while self.manual_layout.count():
+            item = self.manual_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        self.file_inputs = {}
+        
+        # If no files, show message
+        if not self.selected_files:
+            self.no_files_label = QLabel("Please select MRC files first")
+            self.no_files_label.setAlignment(Qt.AlignCenter)
+            self.manual_layout.addWidget(self.no_files_label)
+            return
+        
+        # Create regex validator for manual slice inputs
+        # Allows entries like: "1, 5, 10-20, 30"
+        regex = QRegExp(f"^\\s*\\d+\\s*(\\s*\\d+\\s*)?((,\\s*\\d+\\s*(\\s*\\d+\\s*)?)*)$")
+        validator = QRegExpValidator(regex)
+        
+        # Create input fields for each file
+        for idx, file_path in enumerate(self.selected_files):
+            # Create a container for this file's controls
+            file_widget = QWidget()
+            file_layout = QVBoxLayout(file_widget)
+            
+            # Extract filename from path for display
+            filename = os.path.basename(file_path)
+            
+            # File label
+            file_label = QLabel(f"File {idx+1}: {filename}")
+            file_label.setStyleSheet("font-weight: bold;")
+            file_layout.addWidget(file_label)
+            
+            # Path label (smaller text, elided if too long)
+            path_label = QLabel(file_path)
+            path_label.setStyleSheet("font-size: 9pt; color: gray;")
+            path_label.setWordWrap(True)
+            file_layout.addWidget(path_label)
+            
+            # Input for slice numbers
+            slice_label = QLabel(f"Enter slice numbers (comma separated, range 1-{self.depths[file_path]}):")
+            file_layout.addWidget(slice_label)
+            
+            slice_input = QLineEdit()
+            slice_input.setPlaceholderText(f"e.g., 10, 20, 50 (values between 1 and {self.depths[file_path]})")
+            slice_input.setValidator(validator)
+            file_layout.addWidget(slice_input)
+            
+            # Store reference to input field
+            self.file_inputs[file_path] = slice_input
+            
+            # Add to the main layout
+            self.manual_layout.addWidget(file_widget)
+            
+            # Add a separator except for the last item
+            if idx < len(self.selected_files) - 1:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.HLine)
+                separator.setFrameShadow(QFrame.Sunken)
+                self.manual_layout.addWidget(separator)
+        
+        # Add stretch at the end
+        self.manual_layout.addStretch()
+
+
+
+
+class NonEmptyValidator(QValidator):
+    """Custom validator to prevent empty text in QLineEdit"""
+    def validate(self, input_text, pos):
+        if not input_text.strip():
+            return QValidator.Intermediate, input_text, pos
+        return QValidator.Acceptable, input_text, pos
+
+
+class SegmentationImportDialog(QDialog):
+    def __init__(self, dataset, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Import Segmentations")
+        self.resize(450, 250)
+        self.dataset:Dataset = dataset
+        
+        # Create layout
+        self.layout_ = QVBoxLayout()
+        self.example_image_file = Path(self.dataset.micrograph_paths[0]).stem
+        
+        # Add description label
+        description = QLabel(
+            "Add existing segmentations from somewhere else to this dataset. "
+            "The names of segmentation files have to align with the names of the image files "
+            "(without file ending) and an additional short string at the end like \"_seg\". "
+            "Please also input the correct file ending of the segmentation files."
+        )
+        description.setWordWrap(True)
+        self.layout_.addWidget(description)
+        
+
+        dir_layout = QHBoxLayout()
+        dir_label = QLabel("Segmentation files directory:")
+        self.dir_path_label = QLabel("No directory selected")
+        self.dir_button = QPushButton("Browse...")
+        dir_layout.addWidget(dir_label)
+        dir_layout.addWidget(self.dir_path_label, 1)  # Give this widget stretch factor
+        dir_layout.addWidget(self.dir_button)
+        self.layout_.addLayout(dir_layout)
+
+
+        # Create widget for custom ending
+        ending_layout = QHBoxLayout()
+        ending_label = QLabel("Custom ending:")
+        self.ending_input = QLineEdit("_seg")  # Default value
+        self.ending_input.setValidator(NonEmptyValidator())
+        ending_layout.addWidget(ending_label)
+        ending_layout.addWidget(self.ending_input)
+        self.layout_.addLayout(ending_layout)
+        
+        # Create combobox for file extensions
+        extension_layout = QHBoxLayout()
+        extension_label = QLabel("File extension:")
+        self.extension_combo = QComboBox()
+        self.extension_combo.addItems([".png", ".jpeg", ".tiff", ".jpg", ".mrc", ".npz"])
+        extension_layout.addWidget(extension_label)
+        extension_layout.addWidget(self.extension_combo)
+        self.layout_.addLayout(extension_layout)
+        
+        # Create dynamic label that updates when settings change
+        self.dynamic_label = QLabel(f"Segmentation files will be matched as: {self.example_image_file}_seg.png\n"
+                                    f"Found 0 (of {len(self.dataset.micrograph_paths)}) files matching the current set up.\n0 segmentation files will be replaced.")
+        self.layout_.addWidget(self.dynamic_label)
+        
+        # Add button layout
+        button_layout = QHBoxLayout()
+        self.cancel_button = QPushButton("Cancel")
+        self.apply_button = QPushButton("Apply")
+        button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.apply_button)
+        self.layout_.addLayout(button_layout)
+        
+        # Connect signals
+        self.ending_input.textChanged.connect(self.update_preview)
+        self.extension_combo.currentTextChanged.connect(self.update_preview)
+        self.cancel_button.clicked.connect(self.reject)
+        self.apply_button.clicked.connect(self.accept)
+        self.dir_button.clicked.connect(self.select_directory)
+        
+        self.directory = ""
+        # Set layout
+        self.setLayout(self.layout_)
+        
+        # Initial update
+        self.update_preview()
+    
+
+
+    def accept(self):
+        """Override accept to validate inputs before closing the dialog"""
+        if not self.ending_input.text().strip():
+            QMessageBox.warning(self, "Validation Error", "Custom ending cannot be empty.")
+            return
+        
+        if not self.directory:
+            QMessageBox.warning(self, "Validation Error", "Please select a directory for segmentation files.")
+            return
+        
+        settings = self.get_settings()
+        ending = settings["ending"]
+        extension = settings["extension"]
+        directory = settings["directory"]
+        number_of_segmentations = 0
+        number_of_replacements = 0
+        if directory is not None and len(directory)> 0:
+            for micrograph in self.dataset.micrograph_paths:
+                micrograph = Path(micrograph)
+                segmentation = Path(directory) / f"{micrograph.stem}{ending}{extension}"
+                if segmentation.exists():
+                    number_of_segmentations += 1
+                    if self.dataset.segmentation_paths[str(micrograph)] is not None:
+                        number_of_replacements += 1
+        else:
+            return
+        if number_of_segmentations == 0:
+            QMessageBox.warning(self, "Validation Error", "Could not find a corresponding segmentation file.")
+            return
+        only_add_new = True
+        if number_of_replacements != 0:
+            mb = QMessageBox()
+            mb.setWindowTitle("Replacing existing segmentations")
+            mb.setText(f"Are you sure you want to overwrite {number_of_replacements} existing segmentations? " \
+            "All ran analysis on the existing segmentation will also be deleted.")
+            mb.addButton(QPushButton(f"Overwrite ({number_of_replacements}) and add new ({number_of_segmentations - number_of_replacements})"), QMessageBox.ButtonRole.YesRole)
+            mb.addButton(QPushButton(f"Only add new ({number_of_segmentations - number_of_replacements})"), QMessageBox.ButtonRole.ActionRole)
+            mb.addButton(QPushButton("Cancel"), QMessageBox.ButtonRole.RejectRole)
+            result = mb.exec_()
+            if result == 1:
+                return
+            if result == 0:
+                only_add_new = False
+        
+        
+        for micrograph in self.dataset.micrograph_paths:
+            micrograph = Path(micrograph)
+            segmentation = Path(directory) / f"{micrograph.stem}{ending}{extension}"
+            if segmentation.exists():
+                if self.dataset.segmentation_paths[str(micrograph)] is not None and only_add_new:
+                    continue
+                self.dataset.segmentation_paths[str(micrograph)] = str(segmentation)
+                if str(micrograph) in self.dataset.analysers:
+                    if self.dataset.analysers[str(micrograph)] is not None:
+                        wrapper = AnalyserWrapper(self.dataset.analysers[str(micrograph)])
+                        wrapper.remove()
+                    del self.dataset.analysers[str(micrograph)]
+                    
+        self.dataset.save()
+        
+        super().accept()
+
+    @pyqtSlot()
+    def select_directory(self):
+        """Open a dialog to select a directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Directory with Segmentation Files",
+            "", QFileDialog.ShowDirsOnly
+        )
+        
+        if directory:
+            self.directory = directory
+            # If the directory path is too long, show an ellipsis in the middle
+            if len(directory) > 40:
+                display_path = directory[:20] + "..." + directory[-20:]
+            else:
+                display_path = directory
+            self.dir_path_label.setText(display_path)
+            self.dir_path_label.setToolTip(directory)
+            self.update_preview()
+
+
+
+    @pyqtSlot()
+    def update_preview(self):
+        """Update the dynamic label based on current settings"""
+        
+        settings = self.get_settings()
+        ending = settings["ending"]
+        extension = settings["extension"]
+        directory = settings["directory"]
+        number_of_segmentations = 0
+        number_of_replacements = 0
+        if directory is not None and len(directory)> 0:
+            for micrograph in self.dataset.micrograph_paths:
+                micrograph = Path(micrograph)
+                segmentation = Path(directory) / f"{micrograph.stem}{ending}{extension}"
+                if segmentation.exists():
+                    number_of_segmentations += 1
+                    if self.dataset.segmentation_paths[str(micrograph)] is not None:
+                        number_of_replacements += 1
+
+            
+
+        self.dynamic_label.setText(f"Segmentation file(s) will be matched as: {self.example_image_file}{ending}{extension}\n"
+                                   f"Found {number_of_segmentations} (of {len(self.dataset.micrograph_paths)}) file(s) matching the current set up.\n{number_of_replacements} segmentation file(s) will be replaced.")
+    
+        
+        self.apply_button.setEnabled(number_of_segmentations != 0)
+        
+
+
+    def get_settings(self):
+        """Return the current settings"""
+        return {
+            'ending': self.ending_input.text(),
+            'extension': self.extension_combo.currentText(),
+            "directory":self.directory
+        }
+
+
+
+
 class DatasetInfoWidget(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -1213,7 +2060,7 @@ class DatasetInfoWidget(QWidget):
     
     def initUI(self):
 
-
+        self.segwindow = None
         self.numberOfMicrographsLabelLabelLayout = QVBoxLayout()
         self.numberOfMicrographsLabel = QLabel("# Micrographs\n ")
         self.numberOfMicrographsLabelLabelLayout.addWidget(self.numberOfMicrographsLabel)
@@ -1222,6 +2069,15 @@ class DatasetInfoWidget(QWidget):
         self.numberOfMicrographsLabelAddButton = QPushButton("Add micrographs")
         self.numberOfMicrographsLabelAddButton.setToolTip("Add micrographs to the dataset")
         self.numberOfMicrographsLabelAddButton.clicked.connect(self.addMicrographs)
+
+
+        self.numberOfMicrographsLabelAddSegButton = QPushButton("Add segmentations")
+        self.numberOfMicrographsLabelAddSegButton.setToolTip("Add segmentations to the dataset")
+        self.numberOfMicrographsLabelAddSegButton.clicked.connect(self.addSegmentations)
+
+        self.numberOfMicrographsLabelAddSlicesButton = QPushButton("Add tomogram slices")
+        self.numberOfMicrographsLabelAddSlicesButton.setToolTip("Add specific tomogram slices to the dataset.")
+        self.numberOfMicrographsLabelAddSlicesButton.clicked.connect(self.addSlices)
 
         self.numberOfMicrographsLabelLoadCsvButton = QPushButton("Load in CSV")
         self.numberOfMicrographsLabelLoadCsvButton.setToolTip("Load in a csv file with micrograph paths in first column and optional segmentation paths in second. It should have no header.")
@@ -1240,6 +2096,8 @@ class DatasetInfoWidget(QWidget):
         # self.numberOfMicrographsLabelLayout.addWidget(self.numberOfMicrographsLabelLabel)
         self.numberOfMicrographsLabelLayout.addLayout(self.numberOfMicrographsChangeLayout)
         self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelAddButton)
+        self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelAddSegButton)
+        self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelAddSlicesButton)
         self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelLoadCsvButton)
         self.numberOfMicrographsChangeLayout.addWidget(self.numberOfMicrographsLabelRemoveButton)
 
@@ -1289,7 +2147,7 @@ class DatasetInfoWidget(QWidget):
                        "To access most of the functions for this dataset again, you have to unzip it.")
             qm.setIcon(qm.Icon.Warning)
             qm.addButton(QPushButton("Zip dataset"), QMessageBox.ButtonRole.YesRole)
-
+            
             qm.addButton(QPushButton("Cancel"), QMessageBox.ButtonRole.RejectRole)
             ret = qm.exec_()
 
@@ -1396,6 +2254,25 @@ class DatasetInfoWidget(QWidget):
             return
         dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
         self.loadDatasetInfo(dataset)
+
+    def addSlices(self):
+        selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
+        if len(selection) != 1:
+            return
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
+        self.slicerWindow = MrcFileSelector(dataset)
+        self.slicerWindow.show()
+
+
+
+    def addSegmentations(self):
+        selection = self.mainWindow().datasetListWidget.listWidget.selectedItems()
+        if len(selection) != 1:
+            return
+        dataset = self.mainWindow().datasetListWidget.listWidget.itemWidget(selection[0]).dataset
+
+        self.segwindow = SegmentationImportDialog(dataset,None)
+        self.segwindow.show()
 
 
     def addMicrographs(self):

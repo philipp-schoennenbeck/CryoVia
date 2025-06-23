@@ -81,10 +81,11 @@ def checkDefaultSegmentationModel():
     -------
     
     """
+
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
 
-    for modelname in ["Default", "Default_thin"]:
+    for modelname in ["Default", "Default_thin", "Default_tomogram_slices"]:
 
         if not (CRYOVIA_PATH / "SegmentationModels" / modelname).exists():
             default_path = cryovia_install_dir / "default_models" / modelname
@@ -372,12 +373,11 @@ class StringListParamType(click.ParamType):
 def changeToDebug():
     global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
     CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
-    SEGMENTATION_MODEL_DIR .reAssign(CRYOVIA_PATH / "SegmentationModels")
+    SEGMENTATION_MODEL_DIR.reAssign(CRYOVIA_PATH / "SegmentationModels")
     CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
     SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
     cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
     DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
-
     os.environ["CRYOVIA_MODE"] = "1"
 
 
@@ -448,7 +448,6 @@ def GUI():
     Dataset = __import__("cryovia.cryovia_analysis.dataset", globals(), locals()).cryovia_analysis.dataset.Dataset
     MainWindow = __import__("grid_edge_detector.image_gui", globals(), locals()).image_gui.MainWindow
     
-    
 
     # import cryovia
     # from cryovia.gui.shape_drawer import CreateNewShapesWindow
@@ -458,7 +457,7 @@ def GUI():
     # from cryovia.gui.dataset import Dataset
     # from grid_edge_detector.image_gui import MainWindow
 
-
+    
 
     checkFirstTime()
 

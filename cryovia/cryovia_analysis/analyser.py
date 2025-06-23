@@ -939,7 +939,7 @@ class Analyser:
         ridge_points = ridge_detector.find_skeletons(pool) 
         
         self.createMembranePoints_from_pts(ridge_points, add=True)
-
+        
         
         new_points = []
         
@@ -1255,9 +1255,10 @@ class Analyser:
                 polygonimage = np.zeros(self.segmentation_stack.shape[1:], dtype=np.uint8)
                 polygonimage = cv2.fillPoly(polygonimage, [coords], 1)
 
+            max_neighbour_distances = []
                 
             for point_counter, p in enumerate(membrane.points(n=1)):          
-                
+                max_neighbour_distances.append(0)
                 neighbourhood = p.neighbourhood_points
 
 
@@ -1322,6 +1323,7 @@ class Analyser:
                     if not current_distances[-1] and allowed_to_change:
                         best_radius = radius
                         best_center = center
+                        max_neighbour_distances[-1] = cmd
                     if current_distances[-1] and allowed_to_change:
                         allowed_to_change = False
                     if cmd > max_neighbour_distance:
@@ -1386,11 +1388,9 @@ class Analyser:
                 p.curvature = current_c
 
 
-            test = membrane.resize_curvature(200,100)
 
-            membrane_curvatures[membrane.membrane_idx] = test
 
-        return membrane_curvatures
+        return membrane_curvatures, max_neighbour_distances
         
 
 

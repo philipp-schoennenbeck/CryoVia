@@ -111,6 +111,9 @@ DEFAULT_CONFIGS = OrderedDict([
 
 def logical_process(pipe, device="GPU"):
     import tensorflow as tf
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     pipe.send(tf.config.list_logical_devices(device))
 
 def get_logical_devices(device="GPU"):
@@ -215,8 +218,8 @@ class Dataset:
         self.analysers = {}
         now = datetime.now()
         self.last_run_kwargs = {}
-        self.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                      "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+        self.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                      "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                       "Last run":""}
         self.save()
         
@@ -756,6 +759,8 @@ class Dataset:
                 del self.segmentation_paths[micrograph]
             if micrograph in self.analysers:
                 del self.analysers[micrograph]
+            if micrograph in self.pixelSizes:
+                del self.pixelSizes[micrograph]
             self.micrograph_paths.pop(idx)
         if all:
             self.micrograph_paths = []
@@ -942,8 +947,8 @@ class Dataset:
                 raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
-                dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                        "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+                dataset.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                        "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                         "Last run":""}
             if not hasattr(dataset, "last_run_kwargs"):
                 dataset.last_run_kwargs = {}
@@ -961,13 +966,36 @@ class Dataset:
                 raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
-                dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                        "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+                dataset.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                        "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                         "Last run":""}
             if not hasattr(dataset, "last_run_kwargs"):
                 dataset.last_run_kwargs = {}
             if not hasattr(dataset, "pixelSizes"):
                 dataset.pixelSizes = {}
+
+
+        # conversion_date = datetime(2025,5,26,15,45)
+
+        strings = ["Created", "Last changed", "Last run"]
+        changed = False
+        for string in strings:
+            if len(dataset.times[string]) == 0:
+                continue
+            time_str = dataset.times[string]
+            try:
+                dt_object = datetime.strptime(time_str, "%m/%d/%Y, %H:%M:%S")
+            except ValueError:
+                continue
+            
+            # if dt_object < conversion_date:
+            dataset.times[string] = dt_object.strftime("%Y-%m-%d, %H:%M:%S")
+            changed = True
+        if changed:
+            dataset.save()
+
+
+
         return dataset
     
 
@@ -978,6 +1006,9 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path,
     """
     Run the analysis, only called by the run method of datasets.
     """
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     test_counter = 0
     try:
         with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:

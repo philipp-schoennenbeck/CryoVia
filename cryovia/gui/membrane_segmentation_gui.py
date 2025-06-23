@@ -505,7 +505,12 @@ class TrainModelWorker(QObject):
                         valid_loss = round(logs["val_loss"],4)
                     else:
                         valid_loss = None
-                    lr = "{:.4e}".format(logs["lr"])
+                    if "lr" in logs:
+                        lr = "{:.4e}".format(logs["lr"])
+                    elif "learning_rate" in logs:
+                        lr = "{:.4e}".format(logs["learning_rate"])
+                    else:
+                        lr = "NA"
                     print_msg = f"Epoch {epoch+1}/{max_epoch}: {took}s - loss: {loss} - val_loss: {valid_loss} - learning rate: {lr}"
                     self.print(print_msg)
                 
@@ -558,15 +563,17 @@ class TrainModelWorker(QObject):
                     if self.toStop:
                         self.finished.emit()
                         return
-                if self.config.max_batch_size < working_batch_size:
-                    working_batch_size = self.config.max_batch_size
+                    
+                    if self.config.max_batch_size <= current_batch_size:
+                        working_batch_size = self.config.max_batch_size
+                        break
+                
                 gc.collect()
                 tf.keras.backend.clear_session()
                 self.print(f"Found fitting batch size: {working_batch_size}")
                 self.print("Creating training files")
                 
                 train, valid = getTrainingDataForPerformance(self.file_paths["images"], self.file_paths["segmentations"], self.config, self.print, 0,0.25,1, working_batch_size, toStop=self.getShouldIStop(),njobs=self.cores, image_pixel_sizes=self.pixelSizes, seg_pixel_sizes=self.segPixelSize)
-            
                 try:
                     optimizer = Adam(learning_rate=self.config.train_learning_rate)
                     self.model.compile(optimizer, loss)
