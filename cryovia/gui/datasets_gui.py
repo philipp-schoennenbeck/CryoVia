@@ -2782,6 +2782,7 @@ class ConfigWidget(QDialog):
         addParameter("Min size", "min_size", "general")
         addParameter("Rerun segmentation", "rerun_segmentation", "segmentation")
         addParameter("Run only segmentation","only_segmentation", "segmentation")
+        addParameter("Max batch size", "max_batch_size", "segmentation")
         addParameter("Combine snippets (experimental)", "combine_snippets", "segmentation")
         addParameter("Identify instances", "identify_instances", "segmentation")
         addParameter("Max nodes", "max_nodes", "segmentation")

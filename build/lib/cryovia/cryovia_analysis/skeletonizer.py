@@ -344,7 +344,6 @@ def find_skeleton(label_image, shape, conv_data_disk, func, kwargs, ps,get_conv_
         label_image = img_as_bool(resize(label_image, shape))
 
 
-    # TEST
     label_image = skeletonize(label_image)
     
     label_image = binary_dilation(label_image, iterations=2)
@@ -384,6 +383,7 @@ def find_skeleton(label_image, shape, conv_data_disk, func, kwargs, ps,get_conv_
     conv_vesicle /= np.max(conv_vesicle)
 
     ridge_map = func(conv_vesicle, **kwargs)
+
 
     ridge_map[label_vesicle == 0] = np.min(ridge_map)
 
@@ -593,7 +593,13 @@ def ridge_detection(label_volume, image,  njobs=1, pixel_size=1, min_size=8, max
 
     disk_kernel = create_disk(pixel_size, min_size,max_size)
 
+
+    # #TODO:Remove
+    # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/frangi_filter_ouput/orig_image_{name}.png", data, cmap="gray")
+    # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/frangi_filter_ouput/disk_kernel_{name}.png", disk_kernel, cmap="gray")
+
     conv_data_disk = convolve(data, disk_kernel, mode="nearest")
+    # plt.imsave(f"/Data/erc-3/schoennen/membrane_analysis_toolkit/test_code/frangi_filter_ouput/convolved_image_{name}.png", conv_data_disk, cmap="gray")
     out_skeleton = np.zeros(label_volume.shape,dtype=np.uint8)
     kwargs = {'sigmas': np.arange(1,2), 'mode': 'reflect'}
     func =  frangi

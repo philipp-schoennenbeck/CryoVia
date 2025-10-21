@@ -10,7 +10,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "cryovia",
-    version = "0.0.2",
+    version = "0.0.4",
     author = "Philipp Schönnenbeck",
     author_email = "p.schoennenbeck@fz-juelich.de",
     description = ("cryovia"),

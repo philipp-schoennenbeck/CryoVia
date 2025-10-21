@@ -1,7 +1,12 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-import networkx as nx
+ 
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="networkx backend defined more than once: nx-loopback")
+    import networkx as nx
 import warnings
 from skimage.draw import line
 

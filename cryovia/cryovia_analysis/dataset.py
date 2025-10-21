@@ -54,6 +54,7 @@ DEFAULT_CONFIGS = OrderedDict([
         ("rerun_segmentation", False),
         ("identify_instances",True),
         ("segmentation_model",get_all_segmentation_model_names),
+        ("max_batch_size", 0),
         ("only_segmentation", False),
         ("combine_snippets", False),
         ("max_nodes", 30)

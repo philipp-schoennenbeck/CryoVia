@@ -26,6 +26,8 @@ cryovia/default_models/Default/Segmentator.pickle
 cryovia/default_models/Default/best_weights.h5
 cryovia/default_models/Default_thin/Segmentator.pickle
 cryovia/default_models/Default_thin/best_weights.h5
+cryovia/default_models/Default_tomogram_slices/Segmentator.pickle
+cryovia/default_models/Default_tomogram_slices/best_weights.h5
 cryovia/default_models/Shape_curvatures/elongated_pear.npy
 cryovia/default_models/Shape_curvatures/hourglass.npy
 cryovia/default_models/Shape_curvatures/pear.npy

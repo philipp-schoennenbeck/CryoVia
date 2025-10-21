@@ -4,14 +4,15 @@ import pathlib
 import silence_tensorflow.auto
 
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QMainWindow, QToolButton, QMessageBox
-from PyQt5.QtCore import QSize
-from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import QSize, QTimer
+from PyQt5.QtGui import QCloseEvent, QPixmap, QIcon
 from PyQt5 import QtCore
 
 from traceback import format_exception
 
 import click
 import multiprocessing as mp
+
 if os.name == 'nt':
     pathlib.PosixPath = pathlib.WindowsPath
 
@@ -80,10 +81,11 @@ def checkDefaultSegmentationModel():
     -------
     
     """
+
     global CRYOVIA_PATH
     cryovia_install_dir = Path(cryovia.__file__).parent
 
-    for modelname in ["Default", "Default_thin"]:
+    for modelname in ["Default", "Default_thin", "Default_tomogram_slices"]:
 
         if not (CRYOVIA_PATH / "SegmentationModels" / modelname).exists():
             default_path = cryovia_install_dir / "default_models" / modelname
@@ -207,6 +209,13 @@ class CentralWidget(QWidget):
         self.layout().addWidget(self.train_shape_classifier_button)
         self.layout().addWidget(self.edge_detector_button)
 
+        self.to_check = {}
+        self.timer = QTimer()
+        self.runningTimer = runningTimer(self)
+        self.timer.timeout.connect(self.runningTimer.run_step)
+        self.timer.start(0)
+
+
 
     def open_drawer(self):
         """
@@ -254,8 +263,20 @@ class CentralWidget(QWidget):
         """
         Enables the opening of other windows when one window is closed.
         """
+
+        self.analyser_button.setEnabled(True)
+        self.train_cnn_button.setEnabled(True)
+        self.edge_detector_button.setEnabled(True)
+        self.train_shape_classifier_button.setEnabled(True)
         if self.current_window is not None:
+            if isinstance(self.current_window, DatasetGui):
+                self.analyser_button.setEnabled(False)
+                self.to_check["analyser"] = [self.current_window.datasetListWidget.listWidget, self.current_window.runButtonWidget]
+
+                
             self.current_window = None
+
+
         self.setEnabled(True)
             # self.change_button_clickability(True)
 
@@ -264,6 +285,31 @@ class CentralWidget(QWidget):
     #     self.analyser_button.setEnabled(clickable)
     #     self.train_cnn_button.setEnabled(clickable)
     #     self.train_shape_classifier_button.setEnabled(clickable)
+
+
+class runningTimer:
+    def __init__(self, parent):
+        self.parent:CentralWidget = parent
+
+    def run_step(self):
+        to_remove = []
+        for name, thread_check in self.parent.to_check.items():
+            enable = True
+            for thread in thread_check:
+                if thread.currentThread is not None:
+                    if thread.currentThread.isRunning():
+                        enable = False
+            
+            if name == "analyser":
+                self.parent.analyser_button.setEnabled(enable)
+            if enable:
+                to_remove.append(name)
+                self.parent.analyser_button.setToolTip("")
+            else:
+                self.parent.analyser_button.setToolTip("Waiting for threads to close.")
+        for remove in to_remove:
+            del self.parent.to_check[remove]
+
 
 
 class QStartingMenu(QMainWindow):
@@ -275,7 +321,30 @@ class QStartingMenu(QMainWindow):
 
 
         self.setCentralWidget(self.button_widget)
-        self.setWindowTitle("CRYO-VIA")
+        if int(os.environ["CRYOVIA_MODE"])  > 0:
+            self.setWindowTitle("CRYO-VIA DEBUG")
+        else:
+            self.setWindowTitle("CRYO-VIA")
+    
+    def closeEvent(self, a0: QCloseEvent) -> None:
+        self.setVisible(False)
+        printed = False
+        while True:
+
+            to_close = True
+            for name, thread_check in self.button_widget.to_check.items():
+                for thread in thread_check:
+                    if thread.currentThread is not None:
+                        if thread.currentThread.isRunning():
+                            to_close = False
+            QApplication.processEvents()
+            if to_close:
+                break
+            if not printed:
+                print("Waiting for the remaining threads to close.")
+                printed = True
+
+        return super().closeEvent(a0)
         
 
 class StringListParamType(click.ParamType):
@@ -300,6 +369,35 @@ class StringListParamType(click.ParamType):
 
 
 
+
+def changeToDebug():
+    global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
+    CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
+    SEGMENTATION_MODEL_DIR.reAssign(CRYOVIA_PATH / "SegmentationModels")
+    CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
+    SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
+    cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
+    DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
+    os.environ["CRYOVIA_MODE"] = "1"
+
+
+
+
+
+def logical_process(pipe, device="GPU"):
+    import tensorflow as tf
+    pipe.send(tf.config.list_logical_devices(device))
+
+def get_logical_devices(device="GPU"):
+    global MP_START_METHOD
+    con1, con2 = mp.get_context("spawn").Pipe()
+    process = mp.get_context("spawn").Process(target=logical_process, args=[con1, device])
+    process.start()
+    result = con2.recv()
+    return result
+
+
+
 @click.command()
 @click.option("-n", "--njobs", help="Number of njobs to load in and save files. For analysing you can specify other values in the GUI. Default is number of cores/2.",
                type=click.IntRange(1,mp.cpu_count(),clamp=True), default=max(1, mp.cpu_count() // 2))
@@ -318,16 +416,7 @@ def startGui(njobs, gpus, debug):
     
     """
     if debug:
-        global CRYOVIA_PATH, SEGMENTATION_MODEL_DIR, CRYOVIA_PATH, CLASSIFIER_PATH, SHAPE_CURVATURE_PATH, cryovia_TEMP_DIR, DATASET_PATH
-        CRYOVIA_PATH.reAssign(CRYOVIA_PATH.parent / ".cryovia_debug")
-        SEGMENTATION_MODEL_DIR .reAssign(CRYOVIA_PATH / "SegmentationModels")
-        CLASSIFIER_PATH.reAssign(CRYOVIA_PATH / "Classifiers")
-        SHAPE_CURVATURE_PATH.reAssign(CRYOVIA_PATH / "Shape_curvatures")
-        cryovia_TEMP_DIR.reAssign(CRYOVIA_PATH / "temp")
-        DATASET_PATH.reAssign(CRYOVIA_PATH / "DATASETS")
-
-        os.environ["CRYOVIA_MODE"] = "1"
-
+        changeToDebug()
     if gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(i) for i in gpus])
     os.environ["CRYOVIA_NJOBS"] = str(njobs)
@@ -359,7 +448,6 @@ def GUI():
     Dataset = __import__("cryovia.cryovia_analysis.dataset", globals(), locals()).cryovia_analysis.dataset.Dataset
     MainWindow = __import__("grid_edge_detector.image_gui", globals(), locals()).image_gui.MainWindow
     
-    
 
     # import cryovia
     # from cryovia.gui.shape_drawer import CreateNewShapesWindow
@@ -369,7 +457,7 @@ def GUI():
     # from cryovia.gui.dataset import Dataset
     # from grid_edge_detector.image_gui import MainWindow
 
-
+    
 
     checkFirstTime()
 

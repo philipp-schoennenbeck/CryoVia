@@ -6,7 +6,7 @@ from cryovia.cryovia_analysis.analyser import curvatureAnalyser
 from PyQt5.QtCore import Qt, QPoint, QSize, QByteArray, QModelIndex,pyqtSignal, QObject,QThread, QCoreApplication
 # from PyQt5.QtWidgets import *
 from PyQt5.QtWidgets import QApplication, QWidget, QAction, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QComboBox, QListWidget, QGridLayout, QListWidgetItem, QStyle
-from PyQt5.QtWidgets import QInputDialog, QMessageBox, QAbstractItemView, QItemDelegate, QTextEdit, QTableWidget, QTableWidgetItem, QCheckBox
+from PyQt5.QtWidgets import QInputDialog, QMessageBox, QAbstractItemView, QItemDelegate, QTextEdit, QTableWidget, QTableWidgetItem, QCheckBox, QFrame, QDialog
 # from PyQt5.QtGui     import *
 from PyQt5.QtGui import QIcon, QPainter, QPen,QPixmap, QColor, QImage,QValidator, QTextCursor
 import numpy as np
@@ -15,7 +15,15 @@ from pathlib import Path
 import typing
 import os
 import shutil
-from cryovia.cryovia_analysis.shape_classifier import ShapeClassifier, ShapeClassifierFactory, get_all_classifier_paths, get_all_classifier_names, PROTECTED_SHAPES, SHAPE_CURVATURE_PATH, get_all_shapes
+from cryovia.cryovia_analysis.shape_classifier import ShapeClassifier, ShapeClassifierFactory, get_all_classifier_paths, get_all_classifier_names, PROTECTED_SHAPES, SHAPE_CURVATURE_PATH, get_all_shapes, get_all_real_data_curvature_paths
+from cryovia.cryovia_analysis.dataset import Dataset, get_all_dataset_names
+from cryovia.gui.path_variables import DATASET_PATH
+import qimage2ndarray as q2n
+from PyQt5 import QtCore, QtGui
+import pickle
+from datetime import datetime
+import pandas as pd
+from cryovia.cryovia_analysis.analyser import AnalyserWrapper
 import qimage2ndarray as q2np
 from PIL import Image, ImageOps
 
@@ -24,6 +32,494 @@ from cryovia.gui.path_variables import cryovia_TEMP_DIR
 
 
 # cryovia_TEMP_DIR = Path().home() / ".cryovia" / "temp"
+
+class labelSessionData:
+    def __init__(self, name, dataset:Dataset, data ):
+        self.name = name
+        self.dataset = dataset.name
+        self.data = data
+        self.last_run = dataset.times["Last run"]
+
+    def save(self):
+        global SHAPE_CURVATURE_PATH
+
+        file = SHAPE_CURVATURE_PATH / f"{self.name}.pickle" 
+        with open(file, "wb") as f:
+            pickle.dump(self, f)
+
+class thumbnailWidget(QFrame):
+    shape = 120
+
+
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Panel)
+        self.setFrameShadow(QFrame.Raised)
+        self.setLineWidth(1)
+        self.imageLabel = QLabel()
+        self.maskLabel = QLabel()
+        self.image_viewer = None
+
+        # self.imageLabel.setSizePolicy(QSizePolicy(QSizePolicy.Minimum,QSizePolicy.Minimum))
+        # self.maskLabel.setSizePolicy(QSizePolicy(QSizePolicy.Minimum,QSizePolicy.Minimum))
+
+        self.imagePixmap = QPixmap(self.shape,self.shape)
+        self.maskPixmap = QPixmap(self.shape,self.shape)
+        self.imagePixmap.fill(QColor("white"))
+        self.maskPixmap.fill(QColor("white"))
+        self.imageLabel.setPixmap(self.imagePixmap)
+        self.maskLabel.setPixmap(self.maskPixmap)
+        self.imageLabel.adjustSize()
+        self.maskLabel.adjustSize()
+        self.setLayout(QGridLayout())
+
+
+
+        
+        
+        self.layout().addWidget(self.imageLabel,0,0,alignment=Qt.AlignCenter)
+        
+        
+        self.layout().addWidget(self.maskLabel,0,2,alignment=Qt.AlignCenter)
+
+
+
+        
+        # self.layout().setColumnStretch(1,1)
+        # self.layout().setRowStretch(1,1)
+
+        self.imageLabel.setToolTip("Original image")
+        self.maskLabel.setToolTip("Segmentation")
+        self.setMinimumSize(200, 230)
+
+
+        
+        return 
+
+    def loadImages(self, wrapper:AnalyserWrapper, idx:int, ):
+        self.clearAll()
+        if wrapper is None:
+            self.imageLabel.setText("File not found")
+            self.maskLabel.setText("File not found")
+            self.imagePixmap = None
+            self.maskPixmap = None
+            return
+        self.setToolTip(str(wrapper.directory) + f"\nIndex: {str(idx)}")
+        tn, seg = wrapper.get_thumbnails([idx])
+        tn = tn[idx]
+        seg = seg[idx]
+
+        tn = np.array(tn)
+        seg = np.array(seg)
+        image = q2n.gray2qimage(tn)
+       
+        shape = self.shape
+
+        if min(self.width(), self.height()) / 2 - 40 > self.shape:
+            shape = min(self.width(), self.height()) / 2 - 40
+
+        scaled = image.scaled(
+            shape,
+            shape,
+            aspectRatioMode=Qt.KeepAspectRatio, 
+            transformMode=Qt.TransformationMode.SmoothTransformation
+        )
+        self.imagePixmap = QPixmap.fromImage(scaled)
+        self.imageLabel.setPixmap(self.imagePixmap)
+
+        
+        seg = q2n.gray2qimage(seg)
+
+        scaled = seg.scaled(
+            shape,
+            shape,
+            aspectRatioMode=Qt.KeepAspectRatio,
+        )
+        self.maskPixmap = QPixmap.fromImage(scaled)
+        self.maskLabel.setPixmap(self.maskPixmap)
+
+
+
+
+    
+    def clearAll(self):
+        if self.imagePixmap is not None:
+            self.imagePixmap.fill(QColor("white"))
+            self.maskPixmap.fill(QColor("white"))
+            self.imageLabel.setPixmap(self.imagePixmap)
+            self.maskLabel.setPixmap(self.maskPixmap)
+
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        if self.imagePixmap is not None:
+            shape = self.shape
+
+            if min(self.width(), self.height()) / 2 - 40 > self.shape:
+                shape = min(self.width(), self.height()) / 2 - 40
+
+            scaled = self.imagePixmap.scaled(
+                shape,
+                shape,
+                aspectRatioMode=Qt.KeepAspectRatio, 
+                transformMode=Qt.TransformationMode.SmoothTransformation
+            )
+            self.imagePixmap = scaled
+            self.imageLabel.setPixmap(self.imagePixmap)
+
+            
+            
+
+            scaled = self.maskPixmap.scaled(
+                shape,
+                shape,
+                aspectRatioMode=Qt.KeepAspectRatio,
+            )
+            self.maskPixmap = scaled
+            self.maskLabel.setPixmap(self.maskPixmap)
+
+
+        return super().resizeEvent(a0)
+
+def get_analyser(row, dataset):
+    if isinstance(row, str):
+        micrograph = row
+    else:
+        micrograph = row["Micrograph"]
+    if not isinstance(micrograph, str):
+        micrograph = micrograph.iloc[0]
+    wrapper = AnalyserWrapper(dataset.dataset_path / micrograph)
+    return wrapper
+
+
+class Dummy:
+    def __init__(self):
+        pass
+
+class MembraneShapeSuggestorWidget(QWidget):
+    def __init__(self,dataset, csv, parent=None, previousSession=None) -> None:
+        super().__init__()
+        self.customParent = parent
+        self.dataset = dataset
+        self.currentIndex = 0
+        self.previousSession = previousSession
+        self.csv = csv
+        self.wrapper = None
+        self.idx = None
+        self.assignedShapes = {}
+        self.curvatures = {}
+
+        self.setLayout(QVBoxLayout())
+        self.windowWidget = thumbnailWidget(self)
+        self.layout().addWidget(self.windowWidget)
+        
+
+        self.nextButtonLayout = QHBoxLayout()
+
+        self.nextButton = QPushButton(">")
+        self.previousButton = QPushButton("<")
+
+        self.previousButton.clicked.connect(lambda x: self.NextMembrane(-1))
+        self.nextButton.clicked.connect(lambda x: self.NextMembrane(1))
+
+        self.nextButtonLayout.addWidget(self.previousButton)
+        self.nextButtonLayout.addWidget(self.nextButton)
+        
+        self.descriptionLabel = QLabel("")
+
+        self.shapeButtonsLayout = QGridLayout()
+
+        self.availableShapes = get_all_shapes()
+        self.buttons = {}
+        for i, shape in enumerate(self.availableShapes):
+            button = QPushButton(shape)
+            button.clicked.connect(lambda x, shape=shape: self.assignShape(shape))
+            self.buttons[shape] = button
+            self.shapeButtonsLayout.addWidget(button, i// 3, i%3)
+        
+        self.optionsLayout = QHBoxLayout()
+        self.doneButton = QPushButton("Done")
+        self.doneButton.clicked.connect(self.done)
+        self.addNewShapeButton = QPushButton("New shape")
+        self.addNewShapeButton.clicked.connect(self.addNewShape)
+
+        self.optionsLayout.addWidget(self.addNewShapeButton)
+        self.optionsLayout.addWidget(self.doneButton)
+
+
+        self.layout().addLayout(self.nextButtonLayout)
+        self.layout().addWidget(self.descriptionLabel)
+        self.layout().addLayout(self.shapeButtonsLayout)
+        self.layout().addLayout(self.optionsLayout)
+
+        if self.previousSession is not None:
+            self.extractShapes()
+    
+        self.NextMembrane(0)
+
+
+    def addNewShape(self):
+        # button = QPushButton("Editable Button", self)
+        if Dummy in self.buttons:
+            return
+        # Create the text field over the button
+        text_field = QLineEdit(self)
+        text_field.setPlaceholderText("NewShape")
+        # text_field.setText(button.text())
+        # text_field.setGeometry(button.geometry())
+        # text_field.setAlignment(button.alignment())
+        
+        # Connect the editingFinished signal to a validation method
+        text_field.editingFinished.connect(self.validate_text)
+        
+        # Add widgets to the layout
+        i = len(self.buttons.keys())
+        # self.shapeButtonsLayout.addWidget(button, i// 3, i%3)
+        self.shapeButtonsLayout.addWidget(text_field, i// 3, i%3)
+        self.buttons[Dummy] = text_field
+        
+        
+
+        # Ensure the text field is on top of the button
+        text_field.raise_()
+        text_field.setFocus()
+        self.newShapeTextField = text_field
+
+    def validate_text(self):
+        pass
+        
+        text = self.newShapeTextField.text()
+        shapes = get_all_shapes()
+        if text in shapes:
+            QMessageBox.warning(self, "Invalid Input", f"The shape '{text}' already exists.")
+            self.newShapeTextField.setFocus()  # Keep focus on the text field
+            self.newShapeTextField.selectAll()  # Optionally, select all text for easy replacement
+        elif " " in text:
+            QMessageBox.warning(self, "Invalid Input", f"No spaces in shape names.")
+            self.newShapeTextField.setFocus()  # Keep focus on the text field
+            self.newShapeTextField.selectAll()
+        else:
+            # Update the button text with the validated text
+            # self.button.setText(text)
+            
+
+            
+            self.layout().removeWidget(self.newShapeTextField)
+            self.newShapeTextField.deleteLater()
+            self.newShapeTextField = None
+            del self.buttons[Dummy]
+            if len(text) > 0:
+                global SHAPE_CURVATURE_PATH
+                new_path = SHAPE_CURVATURE_PATH / f"{text}.npy"
+                curvatures = np.empty((0, 200), dtype=np.float64)
+                # curvatures = np.array([], dtype=np.float64)
+                np.save(new_path, curvatures)
+
+
+                new_button = QPushButton(text)
+                self.buttons[text] = new_button
+                i = len(self.buttons.keys()) - 1
+                self.shapeButtonsLayout.addWidget(new_button, i// 3, i%3)
+                new_button.clicked.connect(lambda x, shape=text: self.assignShape(shape))
+                if self.customParent is not None:
+                    self.customParent.shapesListWidget.classifier_selection_changed()
+
+
+    def NextMembrane(self, direction=1):
+        self.currentIndex += direction
+        if self.currentIndex < 0:
+            self.currentIndex = 0
+            
+            return
+        if self.currentIndex >= len(self.csv):
+            self.currentIndex = len(self.csv) - 1
+            return
+        row = self.csv.iloc[self.currentIndex]
+        self.wrapper = get_analyser(row, self.dataset)
+        self.idx = row["Index"]
+        self.windowWidget.loadImages(self.wrapper, self.idx)
+        if self.currentIndex == 0:
+            self.previousButton.setEnabled(False)
+        else:
+            self.previousButton.setEnabled(True)
+
+        if self.currentIndex == len(self.csv) - 1:
+            self.nextButton.setEnabled(False)
+        else:
+            self.nextButton.setEnabled(True)
+        shape = row["Shape"]
+        proba = row["Shape probability"]
+        for button in self.buttons.values():
+            button.setStyleSheet("")
+        if shape in self.buttons:
+            self.buttons[shape].setStyleSheet("background-color: lightsalmon;")
+
+        if self.currentIndex in self.assignedShapes:
+            self.descriptionLabel.setText(f"{shape}: {proba} --> {self.assignedShapes[self.currentIndex]}")
+            if self.assignedShapes[self.currentIndex] in self.buttons:
+                self.buttons[self.assignedShapes[self.currentIndex]].setStyleSheet("background-color: lightgreen;")
+        else:
+
+            self.descriptionLabel.setText(f"{shape}: {proba}")
+    
+
+    def extractShapes(self):
+        if self.previousSession is not None:
+            self.previousSession:labelSessionData
+            for shape, curvatures in self.previousSession.data.items():
+                for curvature in curvatures:
+                    self.assignedShapes[curvature["index"]] = shape
+                    self.curvatures[curvature["index"]] = curvature
+
+    def assignShape(self, shape):
+        self.assignedShapes[self.currentIndex] = shape
+        row = self.csv.iloc[self.currentIndex]
+        previous_shape = row["Shape"]
+        proba = row["Shape probability"]
+        wrapper = get_analyser(row, self.dataset)
+        membrane = wrapper.analyser[row["Index"]]
+        self.curvatures[self.currentIndex]= {"curvatures":membrane.resize_curvature(200,100), "index":self.currentIndex}
+
+        self.descriptionLabel.setText(f"{previous_shape}: {proba} --> {self.assignedShapes[self.currentIndex]}")
+        self.NextMembrane(1)
+
+    
+    def done(self):
+        global SHAPE_CURVATURE_PATH
+        qm = QMessageBox()
+        qm.setText(f"Add curvatures to shape files (Cannot be converted without resetting the files).\nAdd this as a separate option.")
+        qm.setIcon(qm.Icon.Warning)
+        qm.addButton(QPushButton("Add to shape files"),  QMessageBox.ButtonRole.YesRole)
+
+        qm.addButton(QPushButton("Separate option"), QMessageBox.ButtonRole.AcceptRole)
+        # qm.addButton(QPushButton("Remove for future analysis"), QMessageBox.ButtonRole.ActionRole)
+        qm.addButton(QPushButton("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        # qm.setCheckBox()
+        
+        ret = qm.exec_()
+        
+        
+        if ret == 2:
+            return
+        if ret == 0:
+            shapes_values = {}
+            for key, value in self.assignedShapes.items():
+                if value not in shapes_values:
+                    shapes_values[value] = []
+                shapes_values[value].append(self.curvatures[key]["curvatures"])
+            
+
+            for key, curvatures in shapes_values.items():
+                curvatures = np.array(curvatures)
+       
+                file = SHAPE_CURVATURE_PATH / f"{key}.npy"
+                old_curvatures = np.load(file)
+                curvatures = np.concatenate((old_curvatures, curvatures))
+                np.save(file, curvatures)
+        if ret == 1:
+            shapes_values = {}
+
+            name = datetime.now().strftime(f"%Y%m%d-%H:%M:%S_{self.dataset.name}.pickle")
+            manual_file = SHAPE_CURVATURE_PATH / name
+            counter = 0
+            
+
+            while manual_file.exists():
+                manual_file:Path = SHAPE_CURVATURE_PATH / name.replace(".pickle", f"_{counter}.pickle")
+                counter += 1
+            for key, value in self.assignedShapes.items():
+                if value not in shapes_values:
+                    shapes_values[value] = []
+                shapes_values[value].append(self.curvatures[key])
+            # for key in shapes_values.keys():
+            #     shapes_values[key] = np.array(shapes_values[key])
+
+            if self.previousSession is not None:
+                newSession = self.previousSession
+                newSession.data = shapes_values
+            else:
+                newSession = labelSessionData(manual_file.stem, self.dataset, shapes_values)
+            newSession.save()
+            
+        self.close()
+
+
+    def closeEvent(self, closeevent):
+        if self.customParent is not None:
+            self.customParent.shapesListWidget.classifier_selection_changed()
+
+        super().closeEvent(closeevent)
+
+
+class chooseDatasetWidget(QWidget):
+    def __init__(self, parent) -> None:
+        global DATASET_PATH
+        super().__init__()
+        self.setLayout(QVBoxLayout())
+        self.customParent = parent
+
+        self.explainLabel = QLabel("Choose a dataset. You can label the shapes of real vesicles and later add it to a training run of a classifier.\nThe shown shapes are sorted by least to highest shape probability.")
+        self.explainSessionLabel = QLabel("Or choose a previous labeling session to continue.\nSessions from which the dataset has been deleted or changed cannot be continued.")
+        datasets = [Dataset.load(i) for i in get_all_dataset_names()]
+        self.datasets = {dataset.name:dataset for dataset in datasets}
+        self.listWidget = QListWidget()
+        for dataset_name, dataset in self.datasets.items():
+            self.listWidget.addItem(dataset_name)
+        self.buttonLayout = QHBoxLayout()
+
+        self.previousSessionListWidget = QListWidget()
+        previousSessions = get_all_real_data_curvature_paths()
+        self.sessions = {}
+        
+        for session in previousSessions:
+            with open(session, "rb") as f:
+                session_object:labelSessionData = pickle.load(f)
+            newItem = QListWidgetItem(session_object.name)
+            self.previousSessionListWidget.addItem(newItem)
+            self.sessions[session_object.name] = session_object
+            if session_object.dataset in self.datasets:
+                try:
+                    dataset = Dataset.load(DATASET_PATH / session_object.dataset)
+                    if dataset.times["Last run"] != session_object.last_run:
+                        newItem.setFlags(newItem.flags() & ~Qt.ItemIsSelectable)
+                        newItem.setToolTip("Cannot be selected because the dataset has changed since creating this session.")
+                except FileNotFoundError:
+                    newItem.setFlags(newItem.flags() & ~Qt.ItemIsSelectable)
+                    newItem.setToolTip("Cannot be selected because the dataset does not exist anymore.")
+
+        
+        self.listWidget.itemSelectionChanged.connect(self.selectionChangeListWidget)
+        self.previousSessionListWidget.itemSelectionChanged.connect(self.selectionChangePreviousListWidget)
+
+        self.chooseButton = QPushButton("Okay")
+        self.cancelButton = QPushButton("Cancel")
+
+        self.buttonLayout.addWidget(self.chooseButton)
+        self.buttonLayout.addWidget(self.cancelButton)
+
+        self.layout().addWidget(self.explainLabel)
+        self.layout().addWidget(self.listWidget)
+        self.layout().addWidget(self.explainSessionLabel)
+        self.layout().addWidget(self.previousSessionListWidget)
+        self.layout().addLayout(self.buttonLayout)
+
+        self.chooseButton.clicked.connect(self.customParent.openNextWindow)
+        self.cancelButton.clicked.connect(self.close)
+        self.chooseButton.setEnabled(False)
+        self.dummyWindow = None
+
+    def selectionChangeListWidget(self):
+        if len(self.listWidget.selectedItems()) > 0:
+            self.previousSessionListWidget.clearSelection()
+        self.enableButton()
+
+    def selectionChangePreviousListWidget(self):
+        if len(self.previousSessionListWidget.selectedItems()) > 0:
+            self.listWidget.clearSelection()
+        self.enableButton()
+    
+    def enableButton(self):
+        self.chooseButton.setEnabled((len(self.listWidget.selectedItems()) + len(self.previousSessionListWidget.selectedItems())) > 0)
+
 
 class ShapeDrawingWindow(QLabel):
     """
@@ -141,13 +637,14 @@ class CalcCurvatureWorker(QObject):
 
     finished = pyqtSignal()
     progress = pyqtSignal(tuple)
-    def __init__(self, image, shape,idx, flip, vary_size, rotate):
+    def __init__(self, image, shape,idx, flip, vary_size, rotate, adaptive):
         super().__init__()
         self.image = Image.fromarray(image)
         self.shape = shape
         self.flip = flip
         self.vary_size = vary_size
         self.rotate = rotate
+        self.adaptive = adaptive
         self.idx = idx
         # self.threshold = threshold
 
@@ -203,7 +700,10 @@ class CalcCurvatureWorker(QObject):
         
         for img in new_images:
             analyser = curvatureAnalyser(img)
-            analyser.estimateCurvature(max_neighbour_dist=80)
+            if self.adaptive:
+                analyser.estimateCurvatureAdaptive(400, 5, step=20)
+            else:
+                analyser.estimateCurvature(max_neighbour_dist=80)
             curvs = analyser.membranes[0].resize_curvature(200,100)
             
             # raise NotImplementedError
@@ -284,10 +784,13 @@ class SideWindow(QWidget):
         self.varySizesCheckbox.setToolTip("Vary sizes for curvature estimation.")
         self.rotateCheckbox = QCheckBox(text="Rotate")
         self.rotateCheckbox.setChecked(True)
-        self.rotateCheckbox.setToolTip("Calculate curvature for rotations as well")
+        self.rotateCheckbox.setToolTip("Calculate curvature for rotations as well.")
         self.flipCheckbox = QCheckBox(text="Flip")
         self.flipCheckbox.setChecked(True)
-        self.flipCheckbox.setToolTip("Calculate curvature for flipped image as well")
+        self.flipCheckbox.setToolTip("Calculate curvature for flipped image as well.")
+        self.adaptiveCheckbox = QCheckBox(text="Adaptive curvature")
+        self.adaptiveCheckbox.setChecked(False)
+        self.adaptiveCheckbox.setToolTip("Whether to use adaptive curvature estimation.")
 
         self.buttonLayout = QHBoxLayout()
 
@@ -296,6 +799,7 @@ class SideWindow(QWidget):
         self.buttonLayout.addWidget(self.rotateCheckbox)
         self.buttonLayout.addWidget(self.flipCheckbox)
         self.buttonLayout.addWidget(self.varySizesCheckbox)
+        self.buttonLayout.addWidget(self.adaptiveCheckbox)
 
         self.messageBoard = QTextEdit(self)
         self.messageBoard.setReadOnly(True)
@@ -330,10 +834,10 @@ class SideWindow(QWidget):
             if checkImage(np_image):
                 result = self.calcCurvature(np_image)
                 if not result:
-                    self.newMessage("No shape selected.")
+                    self.newMessage("No shape selected.\n")
                     return
             else:
-                self.newMessage("Shape is invalid.")
+                self.newMessage("Shape is invalid.\n")
             self.clearDrawer()
 
 
@@ -350,7 +854,7 @@ class SideWindow(QWidget):
 
         self.newMessage(f"Starting to calculate curvature for image {self.workerCounter}.\n")
         thread = QThread()
-        worker = CalcCurvatureWorker(image, shape, self.workerCounter, self.flipCheckbox.isChecked(), self.varySizesCheckbox.isChecked(), self.rotateCheckbox.isChecked() )
+        worker = CalcCurvatureWorker(image, shape, self.workerCounter, self.flipCheckbox.isChecked(), self.varySizesCheckbox.isChecked(), self.rotateCheckbox.isChecked(), self.adaptiveCheckbox.isChecked() )
 
         self.workerCounter += 1
         worker.moveToThread(thread)
@@ -498,7 +1002,7 @@ class ClassifierListWidget(QWidget):
         self.ListWidget.itemSelectionChanged.connect(self.loadNewClassifier)
 
         self.classifierLabel = QLabel("Available classifiers")
-        
+        self.realDataWindow = None
 
         self.attributesLayout = QGridLayout()
 
@@ -548,6 +1052,9 @@ class ClassifierListWidget(QWidget):
         # self.renameButton = QPushButton()
         # self.renameButton.setIcon(self.renameButton.style().standardIcon(QStlye.))
     
+        self.getRealDataButton = QPushButton("Add training data from datasets")
+        self.getRealDataButton.clicked.connect(self.getRealData)
+
         self.buttonLayout = QHBoxLayout()
         self.buttonLayout.addWidget(self.removeButton)
         self.buttonLayout.addWidget(self.addButton)
@@ -560,8 +1067,42 @@ class ClassifierListWidget(QWidget):
         self.layout().addWidget(self.classifierLabel)
         self.layout().addWidget(self.ListWidget)
         self.layout().addLayout(self.buttonLayout)
+        self.layout().addWidget(self.getRealDataButton)
+
+
+
         # self.removeButton.font().setBold(True)
         self.createItems()
+
+    def getRealData(self):
+        self.realDataWindow = chooseDatasetWidget(self)
+        self.realDataWindow.show()
+        
+
+    def openNextWindow(self):
+        dataset = None
+        previousSession = None
+        dataset_list = self.realDataWindow.listWidget.selectedItems()
+        if len(dataset_list) == 1:
+
+            dataset = self.realDataWindow.datasets[dataset_list[0].text()]
+        elif len(dataset_list) == 0:
+            dataset_list = self.realDataWindow.previousSessionListWidget.selectedItems()
+            dataset = Dataset.load(self.realDataWindow.sessions[dataset_list[0].text()].dataset)
+            previousSession = self.realDataWindow.sessions[dataset_list[0].text()]
+        if dataset is not None:
+
+            
+            self.realDataWindow.close()
+            # dataset = Dataset.load(dataset)
+            csv:pd.DataFrame = dataset.csv
+            sorted_csv = csv.sort_values("Shape probability")
+
+
+            self.realDataWindow  = MembraneShapeSuggestorWidget(dataset, sorted_csv, self.parent(), previousSession=previousSession)
+            self.realDataWindow.show()
+            
+            
 
 
     def changeType(self):
@@ -618,12 +1159,25 @@ class ClassifierListWidget(QWidget):
             self.ListWidget.addItem(ClassifierListWidgetItem(self.ListWidget, classifier=copied_classifier))
 
     def trainClassifier(self):
+        
         items = self.ListWidget.selectedItems()
         if len(items) == 1:
+
+            real_data = get_all_real_data_curvature_paths()
+            real_data = {rd.stem:rd for rd in real_data}
+            extra_data = []
+            if len(real_data) > 0:
+               dialog = chooseSessionDialog(real_data)
+               ret = dialog.exec_()
+               if ret == 0:
+                    return
+               else:
+                    extra_data = [real_data[i.text()] for i in dialog.listwidget.selectedItems()]
+
             classifier:ShapeClassifier = items[0].classifier
             self.parent().sideWindow.newMessage(f"Training classifier: {classifier.name}. Please wait.\n")
 
-            classifier.train()
+            classifier.train(extra_data=extra_data)
             self.parent().sideWindow.newMessage(f"Training finished for classifier: {classifier.name}.\n")
 
     def removeClassifier(self):
@@ -657,6 +1211,51 @@ class ClassifierListWidget(QWidget):
         title = "Not possible"
         message = "You cannot remove the Default classifier."
         reply = messageBox.question(self, title, message, messageBox.Cancel, messageBox.Cancel)
+
+
+
+
+
+class chooseSessionDialog(QDialog):
+    def __init__(self, real_data, parent=None):
+        def changeNextButton():
+            number_of_datasets = len(self.listwidget.selectedItems())
+            if number_of_datasets == 0:
+                self.ok_button.setText("Train")
+            else:
+                self.ok_button.setText(f"Train with {number_of_datasets} sessions")
+
+        super().__init__(parent)
+        
+        # self.setWindowTitle(title)
+        
+        # Create layout
+        layout = QVBoxLayout(self)
+
+        # Add a message label
+        label = QLabel(f"You have training data from real datasets.\nDo you want to add any of these to the training?\nSelect the training sessions you want to add.")
+        layout.addWidget(label)
+
+        # Add the QListWidget
+        self.listwidget = QListWidget()
+        self.listwidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        for i in real_data.keys():
+            self.listwidget.addItem(i)
+        self.listwidget.itemSelectionChanged.connect(changeNextButton)
+        layout.addWidget(self.listwidget)
+
+        # Add buttons
+        button_layout = QHBoxLayout()
+        self.ok_button = QPushButton("Next")
+        
+        self.ok_button.clicked.connect(self.accept)
+        button_layout.addWidget(self.ok_button)
+
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_button)
+
+        layout.addLayout(button_layout)
 
 
 class ShapesListWidget(QWidget):
@@ -728,7 +1327,8 @@ class ShapesListWidget(QWidget):
     def createNewShape(self, name):
         global SHAPE_CURVATURE_PATH
         new_path = SHAPE_CURVATURE_PATH / f"{name}.npy"
-        curvatures = np.array([], dtype=np.float64)
+        curvatures = np.empty((0, 200), dtype=np.float64)
+        # curvatures = np.array([], dtype=np.float64)
         np.save(new_path, curvatures)
         self.classifier_selection_changed()
 
@@ -784,8 +1384,10 @@ class ShapesListWidget(QWidget):
             idx = idx[0].row()
             item = self.usedListWidget.takeItem(idx)
             self.unusedListWidget.addItem(item)
-
-            self.list_widget.selectedItems()[0].classifier.remove_class(item.text())
+            cls = item.text()
+            if " (!)" in cls:
+                cls = cls.replace(" (!)", "")
+            self.list_widget.selectedItems()[0].classifier.remove_class(cls)
             self.classifier_selection_changed()
             
 

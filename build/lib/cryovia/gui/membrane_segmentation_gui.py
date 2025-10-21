@@ -24,7 +24,7 @@ import os
 import shutil
 import traceback
 from cryovia.gui.segmentation_files.segmentation_model import *
-from cryovia.gui.napari_seg_helper import SegmentationHelper
+
 # from cryovia.gui.napari_plugin import SegmentationHelper
 import pyqtgraph as pyqtg
 import multiprocessing
@@ -121,7 +121,7 @@ class IoUModelWorker(QObject):
 
 
 
-        self.print("Predicting")
+        self.print("Check stuff for predictions")
 
         # self.currently_training = True
         
@@ -155,7 +155,7 @@ class IoUModelWorker(QObject):
             differences = []
             # for path, seg_path in zip(self.testData["images"], self.testData["segmentations"]):
             turned_patches_total = []
-
+            self.print("Predicting")
 
             dataset = customDatasetForPerformance(self.testData["images"], self.testData["segmentations"],working_batch_size, self.config, ".", "IoUTest", njobs=int(os.environ["CRYOVIA_NJOBS"]),stepSize=self.config.input_shape,shuffle=False, flip=False)
             # x_pred, shape = loadPredictData([path], self.config, )
@@ -211,7 +211,7 @@ class IoUModelWorker(QObject):
             predicted_patches = np.array(predicted_patches)
   
                 
-                
+        self.print("Finished predicting")
         self.finished.emit()
 
 
@@ -294,6 +294,8 @@ class PredictModelWorker(QObject):
             working_batch_size = None
             tried_batch_sizes = set()
             while current_batch_size not in tried_batch_sizes:
+                if current_batch_size > self.config.max_batch_size:
+                    break
                 tried_batch_sizes.add(current_batch_size)
                 if current_batch_size == 0:
                     self.currently_training = False
@@ -435,7 +437,7 @@ class TrainModelWorker(QObject):
 
     finished = pyqtSignal()
     progress = pyqtSignal(tuple)
-    def __init__(self, file_paths, model, loss, config, gpu, cores, callbacks, name, pixelSizes):
+    def __init__(self, file_paths, model, loss, config, gpu, cores, callbacks, name, pixelSizes,segPixelSize):
                 
 
         super().__init__()
@@ -448,6 +450,7 @@ class TrainModelWorker(QObject):
         self.cores = cores
         self.callbacks = callbacks
         self.pixelSizes = pixelSizes
+        self.segPixelSize = segPixelSize
         self.toStop = False
         self.callbacks.append(customCallback([self.emitCallback]))
         self.name = name
@@ -502,7 +505,12 @@ class TrainModelWorker(QObject):
                         valid_loss = round(logs["val_loss"],4)
                     else:
                         valid_loss = None
-                    lr = "{:.4e}".format(logs["lr"])
+                    if "lr" in logs:
+                        lr = "{:.4e}".format(logs["lr"])
+                    elif "learning_rate" in logs:
+                        lr = "{:.4e}".format(logs["learning_rate"])
+                    else:
+                        lr = "NA"
                     print_msg = f"Epoch {epoch+1}/{max_epoch}: {took}s - loss: {loss} - val_loss: {valid_loss} - learning rate: {lr}"
                     self.print(print_msg)
                 
@@ -555,15 +563,17 @@ class TrainModelWorker(QObject):
                     if self.toStop:
                         self.finished.emit()
                         return
-                if self.config.max_batch_size < working_batch_size:
-                    working_batch_size = self.config.max_batch_size
+                    
+                    if self.config.max_batch_size <= current_batch_size:
+                        working_batch_size = self.config.max_batch_size
+                        break
+                
                 gc.collect()
                 tf.keras.backend.clear_session()
                 self.print(f"Found fitting batch size: {working_batch_size}")
                 self.print("Creating training files")
                 
-                train, valid = getTrainingDataForPerformance(self.file_paths["images"], self.file_paths["segmentations"], self.config, self.print, 0,0.25,1, working_batch_size, toStop=self.getShouldIStop(),njobs=self.cores, image_pixel_sizes=self.pixelSizes)
-            
+                train, valid = getTrainingDataForPerformance(self.file_paths["images"], self.file_paths["segmentations"], self.config, self.print, 0,0.25,1, working_batch_size, toStop=self.getShouldIStop(),njobs=self.cores, image_pixel_sizes=self.pixelSizes, seg_pixel_sizes=self.segPixelSize)
                 try:
                     optimizer = Adam(learning_rate=self.config.train_learning_rate)
                     self.model.compile(optimizer, loss)
@@ -578,7 +588,7 @@ class TrainModelWorker(QObject):
                     self.print("Starting training")
                     history = self.model.fit(x=train, batch_size=working_batch_size,
                         epochs=self.config.train_epochs, verbose=0, validation_data=valid, callbacks=self.callbacks)
-                    
+                    del self.model
                     
 
                     train.clean()
@@ -588,8 +598,14 @@ class TrainModelWorker(QObject):
                     valid.clean()
                     raise e
         except Exception as e:
+            try:
+                tf.keras.backend.clear_session()
+            except:
+                pass
             self.print(f"There was an error during training. {traceback.format_exc()}")
-
+        tf.keras.backend.clear_session()
+        gc.collect()
+        self.print("Finished training")
         self.finished.emit()
 
     def getShouldIStop(self):
@@ -1169,6 +1185,7 @@ class TrainWidget(QWidget):
 
 
                 pixelSizes = {path:None for path in m.trainPaths["images"]}
+                segPixelSize = m.pixel_sizes
                 nonMrcFiles = [path for path in m.trainPaths["images"] if Path(path).suffix != ".mrc"]
                 if len(nonMrcFiles) > 0:
                     pixelSizeWidget = NonMrcFilesPixelSizeWidget(self, len(nonMrcFiles))
@@ -1185,7 +1202,7 @@ class TrainWidget(QWidget):
 
 
                 self.threads[item.segModel.name] = QThread()
-                self.workers[item.segModel.name] = TrainModelWorker(m.trainPaths, m.load(), segmentationLoss, m.config, gpu, cores, m.createCallbacks(), m.name,pixelSizes)
+                self.workers[item.segModel.name] = TrainModelWorker(m.trainPaths, m.load(), segmentationLoss, m.config, gpu, cores, m.createCallbacks(), m.name,pixelSizes, segPixelSize)
                 
                 
                 self.stopSignal.connect(self.workers[item.segModel.name].stop)
@@ -1262,7 +1279,7 @@ class TrainWidget(QWidget):
                 files = []
             
             if item is not None:
-            
+                from cryovia.gui.napari_seg_helper import SegmentationHelper
                 m:segmentationModel = item.segModel
                 window.add_dock_widget(SegmentationHelper(viewer, files=files, custom_parent=self, segmentation_model=m,default_pixel_size=pixel_size)) #"cryovia Segmentation Helper"
             else:

@@ -1,6 +1,10 @@
 import numpy as np
 from numba import njit
-import networkx as nx
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="networkx backend defined more than once: nx-loopback")
+    import networkx as nx
 
 def neighbors(shape):
     dim = len(shape)

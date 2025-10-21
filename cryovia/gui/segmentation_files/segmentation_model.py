@@ -734,7 +734,7 @@ class segmentationModel:
         else:
             visible = None
         self.load()
-        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue, visible )) for gpu_idx in range(len(gpu))]
+        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue, visible, kwargs["segmentation"]["max_batch_size"] )) for gpu_idx in range(len(gpu))]
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
         unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path,errorQueue)) for _ in range(number_of_unpatchifyer_procceses)]
@@ -857,7 +857,7 @@ def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx)
         raise e
 import time
 
-def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue, visible ):
+def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue, visible, max_batch_size ):
     from cryovia.gui.starting_menu import changeToDebug
     if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
         changeToDebug()
@@ -934,7 +934,8 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                 if current_batch_size > segmentationModel.config.max_batch_size:
                     current_batch_size = segmentationModel.config.max_batch_size
                     break
-
+            if working_batch_size > max_batch_size and max_batch_size > 0:
+                working_batch_size = max_batch_size
             tf.keras.backend.clear_session()
             output_counter = 0
             while True:

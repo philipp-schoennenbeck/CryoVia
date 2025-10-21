@@ -45,6 +45,9 @@ from keras.callbacks import Callback
 
 
 def logical_process(pipe, device="GPU"):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     import tensorflow as tf
     pipe.send(tf.config.list_logical_devices("GPU"))
 
@@ -511,7 +514,7 @@ class segmentationModel:
 
     @property
     def lockedIn(self):
-        return (self.config.save_dir / "best_weights.h5").exists()
+        return (self.config.save_dir / "best.weights.h5").exists()
 
     def createCustomCallbacks(self):
         starting_epoch = self.epochs
@@ -552,8 +555,8 @@ class segmentationModel:
         
         self.print(new_copy.name)
         new_copy.save()
-        if (self.config.save_dir / "best_weights.h5").exists():
-            shutil.copy((self.config.save_dir / "best_weights.h5"), new_copy.config.save_dir / "best_weights.h5")
+        if (self.config.save_dir / "best.weights.h5").exists():
+            shutil.copy((self.config.save_dir / "best.weights.h5"), new_copy.config.save_dir / "best.weights.h5")
             
         return new_copy
         
@@ -573,8 +576,12 @@ class segmentationModel:
             eps_scale=self.config.eps_scale,
         )
         if self.config.save_dir is not None:
-            if not (Path(self.config.save_dir) / "best_weights.h5").exists() or overwrite:
-                model.save_weights((Path(self.config.save_dir) / "best_weights.h5"))
+            if (Path(self.config.save_dir) / "best_weights.h5").exists() and not (Path(self.config.save_dir) / "best.weights.h5").exists() and not overwrite:
+                model.load_weights(Path(self.config.save_dir) / "best_weights.h5")
+                model.save_weights(Path(self.config.save_dir) / "best.weights.h5")
+
+            if not (Path(self.config.save_dir) / "best.weights.h5").exists() or overwrite:
+                model.save_weights((Path(self.config.save_dir) / "best.weights.h5"))
         else:
             self.print("Savedir in config is None")
         return model
@@ -588,7 +595,7 @@ class segmentationModel:
             callbacks.append(ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=10))
         callbacks.append(EarlyStopping(patience=10))
         callbacks.append(
-                ModelCheckpoint(str(Path(self.config.save_dir) / "best_weights.h5"), save_best_only=True,
+                ModelCheckpoint(str(Path(self.config.save_dir) / "best.weights.h5"), save_best_only=True,
                                 save_weights_only=True, monitor="val_loss", mode="min"))
 
         # callbacks.extend(self.createCustomCallbacks())
@@ -610,14 +617,21 @@ class segmentationModel:
 
         model = self.build_model()
         if loaddir is None:
-            if self.config.save_dir is not None and (Path(self.config.save_dir) / "best_weights.h5").exists():
-                loaddir = (Path(self.config.save_dir) / "best_weights.h5")
+            
+            if self.config.save_dir is not None and (Path(self.config.save_dir) / "best.weights.h5").exists():
+                loaddir = (Path(self.config.save_dir) / "best.weights.h5")
+            elif self.config.save_dir is not None and (Path(self.config.save_dir) / "best_weights.h5").exists():
+                model.load_weights(model.load_weights(Path(self.config.save_dir) / "best_weights.h5"))
+                model.save_weights(Path(self.config.save_dir) / "best.weights.h5")
+                loaddir = Path(self.config.save_dir) / "best.weights.h5"
+                print(f"Moved old segmentation weights from {self.name} model.")
+                
             else:
                 return None
         if loaddir.exists():
-                       
-            # self.model.load_weights(str(Path(self.config.save_dir) / "best_weights.h5"))
+            
             model.load_weights(loaddir)
+            
         return model   
         
 
@@ -664,7 +678,7 @@ class segmentationModel:
 
     @property
     def writable(self):
-        return self.name != "Default" and self.name != "Default_thin" 
+        return self.name != "Default" and self.name != "Default_thin" and self.name != "Default_tomogram_slices" 
 
     def __str__(self) -> str:
         return self.name
@@ -687,10 +701,10 @@ class segmentationModel:
     def predict_multiprocessing(self, file_paths, pixelSizes, gpu=None,  kwargs={}, njobs=2, threads=10,tqdm_file=sys.stdout,dataset_name="", stopEvent=None, seg_path=None, mask_path=None ):
         if stopEvent is None:
             stopEvent = mp.get_context("spawn").Event()
-        
+        if gpu is None:
+            gpu = get_logical_devices()
         if isinstance(gpu, str):
             gpu = [gpu]
-
         to_mask = False
         if kwargs["run"]["maskGrid"]:
             if "remove_segmentation_on_edge" in kwargs["maskGrid"] and kwargs["maskGrid"]["remove_segmentation_on_edge"]:
@@ -701,7 +715,11 @@ class segmentationModel:
         loadInQueue = mp.get_context("spawn").Queue(threads)
         predictionQueue = mp.get_context("spawn").Queue(threads)
         outputQueue = mp.get_context("spawn").Queue()
+        errorQueue = mp.get_context("spawn").Queue()
         njobs = threads * njobs
+        njobs = min(njobs, mp.cpu_count())
+        njobs = max(3, njobs)
+        
 
         number_of_loader_proccesses = max(1, int((njobs - len(gpu)) * 1/3))
         number_of_unpatchifyer_procceses = max(1, njobs - len(gpu) - number_of_loader_proccesses)
@@ -709,14 +727,17 @@ class segmentationModel:
         loaderFinishedEvent = mp.get_context("spawn").Event()
         predictorFinishedEvent = mp.get_context("spawn").Event()
         
-        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config)) for _ in range(number_of_loader_proccesses)]
+        loaders = [mp.get_context("spawn").Process(target=loadPathsProcess, args=(filePathsQueue, loadInQueue, self.config, errorQueue, idx)) for idx in range(number_of_loader_proccesses)]
 
-
-        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent )) for gpu_idx in range(len(gpu))]
-
+        if "CUDA_VISIBLE_DEVICES" in os.environ:
+            visible = os.environ["CUDA_VISIBLE_DEVICES"]
+        else:
+            visible = None
+        self.load()
+        predictors = [mp.get_context("spawn").Process(target=predictProcess, args=(self,gpu, gpu_idx,  loadInQueue, predictionQueue,loaderFinishedEvent, errorQueue, visible, kwargs["segmentation"]["max_batch_size"] )) for gpu_idx in range(len(gpu))]
         kwargs["segmentation"]["filled_segmentation"] = self.config.filled_segmentation
 
-        unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path)) for _ in range(number_of_unpatchifyer_procceses)]
+        unpatchifyers = [mp.get_context("spawn").Process(target=unpatchifyProcess, args=(kwargs, self.config, predictionQueue, outputQueue, predictorFinishedEvent, seg_path, mask_path,errorQueue)) for _ in range(number_of_unpatchifyer_procceses)]
 
         if stopEvent.is_set():
             return {}
@@ -767,8 +788,23 @@ class segmentationModel:
                     
                     break
            
+        
         gc.collect()
-        # tf.keras.backend.clear_session()
+        
+        if not errorQueue.empty():
+            tqdm_file.write("Something went wrong during segmentation. Following errors occurred:\n")
+            errorsFound = []
+            while not errorQueue.empty():
+                errorsFound.append(errorQueue.get())
+            
+            for error in errorsFound:
+                tqdm_file.write(error)
+                tqdm_file.write("\n")
+            for processes in [loaders, predictors, unpatchifyers]:
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+            return None
         return results
 
 
@@ -782,44 +818,61 @@ def normalize(x):
     return x
 
 
-def loadPathsProcess(inputqueue, outputqueue, config):
-    
+def loadPathsProcess(inputqueue, outputqueue, config, errorQueue: mp.Queue, idx):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     # import tensorflow as tf
     # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     # # tf.config.set_visible_devices([], 'GPU')
     # with tf.device('/CPU:0'):
-    while True:
-        try:
-            path,ps = inputqueue.get(timeout=5)
-        except queue.Empty:
-            if inputqueue.empty():
-                return
-            continue 
+    counter = 0
+    try:
+        while True:
+            try:
+                path,ps = inputqueue.get(timeout=5)
+            except queue.Empty:
+                if inputqueue.empty():
+                    return
+                continue 
+
+            turned_patches_total = []
+            x_pred, shape = loadPredictData([path], config, ps)
+
+
+            x_pred = normalize(x_pred)
+            x_pred = x_pred[0]
+            shape = shape[0]
+
+            for patch in x_pred:
+                turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
+                turned_patches_total.extend(turned_patches)
+            turned_patches = np.array(turned_patches_total)
+            # turned_patches = tf.constant(turned_patches)
         
-        turned_patches_total = []
-
-        x_pred, shape = loadPredictData([path], config, ps)
-
-
-        x_pred = normalize(x_pred)
-        x_pred = x_pred[0]
-        shape = shape[0]
-
-        for patch in x_pred:
-            turned_patches = [np.rot90(patch, i,(0,1)) for i in range(4)]
-            turned_patches_total.extend(turned_patches)
-        turned_patches = np.array(turned_patches_total)
-        # turned_patches = tf.constant(turned_patches)
-       
-        outputqueue.put((path, turned_patches, shape))
-    
-
+            outputqueue.put((path, turned_patches, shape))
+            counter += 1
+    except Exception as e:
+        errorQueue.put(traceback.format_exc())
+        raise e
 import time
 
-def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event ):
-    try:
+def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, event,errorQueue, visible, max_batch_size ):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
+    counter = 0
+    
 
-        os.environ["CUDA_VISIBLE_DEVICES"]=str(gpu_idx)   
+    try:
+        
+        if visible is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = visible
+
+        else:
+            pass
+            # visible = str(gpu_idx)
+            # os.environ["CUDA_VISIBLE_DEVICES"] = visible    
         gpu = gpus[gpu_idx] 
         import tensorflow as tf
 
@@ -881,8 +934,12 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                 if current_batch_size > segmentationModel.config.max_batch_size:
                     current_batch_size = segmentationModel.config.max_batch_size
                     break
-
+            print(working_batch_size, max_batch_size)
+            if working_batch_size > max_batch_size and max_batch_size > 0:
+                working_batch_size = max_batch_size
+            print(working_batch_size, max_batch_size, "...")
             tf.keras.backend.clear_session()
+            output_counter = 0
             while True:
                 prediction = []
                 try:
@@ -892,6 +949,7 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                         tf.keras.backend.clear_session()
                         return
                     continue
+
                 turned_patches = tf.convert_to_tensor(turned_patches)
 
                 for i in range(0, len(turned_patches), working_batch_size):
@@ -899,67 +957,76 @@ def predictProcess(segmentationModel, gpus, gpu_idx,  inputqueue, outputqueue, e
                     gc.collect()
 
                 prediction = np.concatenate(prediction)
+
                 outputqueue.put((path, prediction, shape))
     except Exception as e:
         tf.keras.backend.clear_session()
-        print(traceback.format_exc())
-
+        errorQueue.put(traceback.format_exc())
         raise e
 
 
-def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_path, mask_path):
-    while True:
-        try:
-            path, prediction, shape = inputqueue.get(timeout=5)
-        except queue.Empty:
-            if event.is_set():
-                return
-            continue
+def unpatchifyProcess(kwargs, config, inputqueue, outputqueue, event, dataset_path, mask_path, errorQueue):
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
+    counter = 0
+    try:
+        while True:
+            try:
+                path, prediction, shape = inputqueue.get(timeout=5)
+            except queue.Empty:
+                if event.is_set():
+                    return
+                continue
             
 
-        predictions = softmax(prediction, -1)
-        predicted_patches = []
-        for i in range(len(prediction)//4):
-            turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
 
-            prediction = np.sum(turned_pred, 0)
+            predictions = softmax(prediction, -1)
+            predicted_patches = []
+            for i in range(len(prediction)//4):
+                turned_pred = [np.rot90(pred, i%4) for pred,i in zip(predictions[i*4:i*4+4], range(4,0,-1))]
 
-            predicted_patches.append(prediction)
-        predicted_patches = np.array(predicted_patches)
-        predicted_image, confidence = unpatchify(predicted_patches, shape, config, threshold=True, both=True)
-        mask = None
-        if kwargs["run"]["maskGrid"]:
-            
-            if "use_existing_mask" in kwargs["maskGrid"] and kwargs["maskGrid"]["use_existing_mask"]:
-                current_mask_path = mask_path / (Path(path).stem + "_mask.pickle")
-                if current_mask_path.exists():
-                    if current_mask_path.suffix == ".pickle":
-                        mask = mask_file.load(current_mask_path).create_mask()
-                    else:
-                        mask,_ = load_file(current_mask_path)
+                prediction = np.sum(turned_pred, 0)
+
+                predicted_patches.append(prediction)
+            predicted_patches = np.array(predicted_patches)
+            predicted_image, confidence = unpatchify(predicted_patches, shape, config, threshold=True, both=True)
+            mask = None
+            if kwargs["run"]["maskGrid"]:
+                
+                if "use_existing_mask" in kwargs["maskGrid"] and kwargs["maskGrid"]["use_existing_mask"]:
+                    current_mask_path = mask_path / (Path(path).stem + "_mask.pickle")
+                    if current_mask_path.exists():
+                        if current_mask_path.suffix == ".pickle":
+                            mask = mask_file.load(current_mask_path).create_mask()
+                        else:
+                            mask,_ = load_file(current_mask_path)
+                else:
+                    mask = find_grid_hole_per_file(path, **kwargs["maskGrid"])
+                if mask is not None:
+                    mask = resizeSegmentation(mask,predicted_image.shape).todense()
+
+            if kwargs["segmentation"]["filled_segmentation"]:
+                predicted_image = get_contour_of_filled_segmentation(predicted_image)
             else:
-                mask = find_grid_hole_per_file(path, **kwargs["maskGrid"])
-            if mask is not None:
-                mask = resizeSegmentation(mask,predicted_image.shape).todense()
+                if kwargs["segmentation"]["identify_instances"]:
+                    try:
+                        max_nodes = 30
+                        if "max_nodes" in kwargs["segmentation"]:
+                            max_nodes = kwargs["segmentation"]["max_nodes"]
+                        predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["general"]["use_only_closed"], name=path, max_membrane_thickness=10, connect_parts=kwargs["segmentation"]["combine_snippets"], max_nodes=max_nodes)
+                    except Exception as e:
+                        raise e
 
-        if kwargs["segmentation"]["filled_segmentation"]:
-            predicted_image = get_contour_of_filled_segmentation(predicted_image)
-        else:
-            if kwargs["segmentation"]["identify_instances"]:
-                try:
-                    max_nodes = 30
-                    if "max_nodes" in kwargs["segmentation"]:
-                        max_nodes = kwargs["segmentation"]["max_nodes"]
-                    predicted_image, skeletons = solve_skeleton_per_job(predicted_image,mask, kwargs["general"]["use_only_closed"], name=path, max_membrane_thickness=10, connect_parts=kwargs["segmentation"]["combine_snippets"], max_nodes=max_nodes)
-                except Exception as e:
-                    raise e
+            predicted_image = sparse.as_coo(predicted_image)
 
-        predicted_image = sparse.as_coo(predicted_image)
+            seg_path = dataset_path / (Path(path).stem + "_labels.npz")
+            sparse.save_npz(seg_path, predicted_image)
 
-        seg_path = dataset_path / (Path(path).stem + "_labels.npz")
-        sparse.save_npz(seg_path, predicted_image)
-
-        outputqueue.put((path, seg_path))
+            outputqueue.put((path, seg_path))
+    except Exception as e:
+        errorQueue.put(traceback.format_exc())
+        raise e
 
 
 if __name__ == "__main__":

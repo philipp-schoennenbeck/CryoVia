@@ -292,8 +292,10 @@ def solveLayer(layer):
     labels, num_features = label(layer, np.ones((3,3), dtype=np.int8),)
     if num_features == 1:
         return np.expand_dims(labels,0)
+    if num_features == 0:
+        return np.expand_dims(labels,0)
     new_stack = []
-    for label_counter in range(0,num_features + 1):
+    for label_counter in range(1,num_features + 1):
         label_image = (labels == label_counter) * 1
         new_stack.append(label_image)
     return np.array(new_stack)
@@ -324,50 +326,99 @@ def create_3d_stack(data):
 
 
 
-def fft_rescale_image(image, new_size):
+def fft_rescale_image(image, new_shape):
     """
-    Rescales an image using cropping in fourier space 
-    Parameters
-    ----------
-    image       : the image to rescale
-    new_size    : the size to rescale the image to
+    Rescale a grayscale image to a new shape using Fourier cropping or padding.
 
-    Returns
-    -------
-    rescaled_image : the rescaled image
+    Parameters:
+    - image: 2D numpy array representing the grayscale image.
+    - new_shape: Tuple (new_height, new_width) representing the desired output shape.
+
+    Returns:
+    - Rescaled image as a 2D numpy array.
     """
-    
-    old_size = np.array(image.shape)
-    
-    rescale_factor = old_size[0] / new_size[0]
-    
-    fft_image = np.fft.fftshift(np.fft.fft2(image))
-    if rescale_factor > 1:
-        difference = (old_size - new_size)
-        to_add_x = 0
-        to_add_y = 0
-        if difference[0] % 2 == 1:
-            to_add_y = -1
-        if difference[1] % 2 == 1:
-            to_add_x = -1
+    # Perform Fourier Transform
+    f_transform = np.fft.fft2(image)
+    f_transform_shifted = np.fft.fftshift(f_transform)
 
-        difference = (difference/2).astype(np.int32)
-        fft_image = fft_image[difference[0] - to_add_y:-difference[0], difference[1]- to_add_x:-difference[1] ]
+    # Get the center of the original Fourier transform
+    original_shape = image.shape
+    center_y, center_x = original_shape[0] // 2, original_shape[1] // 2
 
-    else:
-        difference = (new_size - old_size)
-        to_add_x = 0
-        to_add_y = 0
-        if difference[0] % 2 == 1:
-            to_add_y = 1
-        if difference[1] % 2 == 1:
-            to_add_x = 1
-        difference = (difference/2).astype(np.int32)
-        pad = [(difference[0], difference[0] + to_add_y),(difference[1], difference[1]+ to_add_x)]
-        fft_image = np.pad(fft_image,pad, mode="constant", constant_values=0)
-    
-    rescaled_image = np.real(np.fft.ifft2(np.fft.ifftshift(fft_image)))
+    # Determine new cropping/padding sizes
+    new_height, new_width = new_shape
+    half_new_height, half_new_width = new_height // 2, new_width // 2
+
+    # Create an empty Fourier domain with the new shape
+    resized_f_transform = np.zeros(new_shape, dtype=complex)
+
+    # Define bounds for cropping/padding in the Fourier domain
+    y1 = max(0, center_y - half_new_height)
+    y2 = min(original_shape[0], center_y + half_new_height + new_height % 2)
+    x1 = max(0, center_x - half_new_width)
+    x2 = min(original_shape[1], center_x + half_new_width + new_width % 2)
+
+    y1_new = max(0, half_new_height - center_y)
+    y2_new = y1_new + (y2 - y1)
+    x1_new = max(0, half_new_width - center_x)
+    x2_new = x1_new + (x2 - x1)
+
+    # Copy the relevant portion of the Fourier transform or pad with zeros
+    resized_f_transform[y1_new:y2_new, x1_new:x2_new] = f_transform_shifted[y1:y2, x1:x2]
+
+    # Perform inverse Fourier transform
+    resized_f_transform = np.fft.ifftshift(resized_f_transform)
+    rescaled_image = np.fft.ifft2(resized_f_transform).real
+
+    # Normalize the image to the original range
     return rescaled_image
+
+
+
+# def fft_rescale_image(image, new_size):
+#     """
+#     Rescales an image using cropping in fourier space 
+#     Parameters
+#     ----------
+#     image       : the image to rescale
+#     new_size    : the size to rescale the image to
+
+#     Returns
+#     -------
+#     rescaled_image : the rescaled image
+#     """
+    
+#     old_size = np.array(image.shape)
+    
+#     rescale_factor = old_size[0] / new_size[0]
+    
+#     fft_image = np.fft.fftshift(np.fft.fft2(image))
+#     if rescale_factor > 1:
+#         difference = (old_size - new_size)
+#         to_add_x = 0
+#         to_add_y = 0
+#         if difference[0] % 2 == 1:
+#             to_add_y = -1
+#         if difference[1] % 2 == 1:
+#             to_add_x = -1
+
+#         difference = (difference/2).astype(np.int32)
+#         fft_image = fft_image[difference[0] - to_add_y:-difference[0], difference[1]- to_add_x:-difference[1] ]
+
+#     else:
+#         difference = (new_size - old_size)
+#         to_add_x = 0
+#         to_add_y = 0
+#         if difference[0] % 2 == 1:
+#             to_add_y = 1
+#         if difference[1] % 2 == 1:
+#             to_add_x = 1
+#         difference = (difference/2).astype(np.int32)
+#         pad = [(difference[0], difference[0] + to_add_y),(difference[1], difference[1]+ to_add_x)]
+#         fft_image = np.pad(fft_image,pad, mode="constant", constant_values=0)
+    
+#     rescaled_image = np.real(np.fft.ifft2(np.fft.ifftshift(fft_image)))
+#     return rescaled_image
 
 
 def preprocess(data):
@@ -408,7 +459,8 @@ def resizeSegmentation(image, shape):
     resized_segmentation : the resized segmentation
     """
     
-    
+    if isinstance(image, np.ndarray):
+        return resize(image, shape,0)
     return resize(image.todense(), shape, 0)
     
 
@@ -445,22 +497,24 @@ def load_segmentation_files(paths, config,stepSize=None, get_shapes=False, seg_p
     for path_counter, path in enumerate(paths):
         patches = []
         stack_data,_ = load_file(path)
+
         stack_data = create_3d_stack(stack_data)
- 
-        if config.thin_segmentation:
-            
-            stack_data = np.array([createDilatedSkeleton(layer, config.dilation) for layer in stack_data])
-            p
-        stack_data = (np.sum(stack_data,0) > 0) * 1
+
+
+        
         if seg_pix[path_counter] is not None:
             ps = config.pixel_size
             ratio = seg_pix[path_counter] / ps
-            new_shape = [int(s*ratio) for s in stack_data.shape]
-            stack_data = resizeSegmentation(stack_data, new_shape)
+            new_shape = [int(s*ratio) for s in stack_data.shape[1:]]
 
+            stack_data = np.array([resizeSegmentation(layer, new_shape) for layer in stack_data])
+        
+        if config.thin_segmentation:
+            
+            stack_data = np.array([createDilatedSkeleton(layer, config.dilation) for layer in stack_data])
+        
+        stack_data = (np.sum(stack_data,0) > 0) * 1
         shapes.append(stack_data.shape)
-
-
 
         for i in range(0,stack_data.shape[0],step):
             for j in range(0,stack_data.shape[1],step):
@@ -565,6 +619,7 @@ def unpatchify(patches,image_shape, config, threshold=True, both=False,):
             
 
     if both:
+
         prediction = np.argmax(image, -1)
         confidence = image[..., 1] / np.sum(image, -1)
         return prediction, confidence
@@ -684,8 +739,8 @@ class customDatasetForPerformance(Sequence):
                     
                     segmentation_patches, micro_patches = a.createImprovedSegmentation(self.config, stepSize=stepSize)
                 else:
-                    if seg_pixel_sizes is not None and counter in seg_pixel_sizes:
-                        seg_pix = seg_pixel_sizes[counter]
+                    if seg_pixel_sizes is not None and seg in seg_pixel_sizes:
+                        seg_pix = seg_pixel_sizes[seg]
                     else:
                         seg_pix = None
                     if image_pixel_sizes is not None and micro in image_pixel_sizes:
@@ -805,16 +860,29 @@ def getTrainingDataForPerformance(micrographs, segmentations, config, print_func
     number_of_files = len(micrographs)
     # if seg_pixel_sizes is not None:
     #     seg_pixel_sizes = np.array(seg_pixel_sizes)
-    valid_micrographs = micrographs[int(number_of_files * validation_start):int(number_of_files * validation_end)]
-    valid_segmentations = segmentations[int(number_of_files * validation_start):int(number_of_files * validation_end)]
+    valid_start = int(number_of_files * validation_start)
+    valid_end = int(number_of_files * validation_end)
+    if np.abs(valid_end - valid_start) == 0:
+        valid_end = valid_start + 1
+    valid_micrographs = micrographs[valid_start:valid_end ]
+    valid_segmentations = segmentations[valid_start:valid_end]
     
 
-    train_micrographs = micrographs[0:int(number_of_files * validation_start)]
-    train_micrographs.extend(micrographs[int(number_of_files * validation_end):])
+    train_micrographs = micrographs[0:valid_start]
+    train_micrographs.extend(micrographs[valid_end:])
+
+    train_segmentations = segmentations[0:valid_start]
+    train_segmentations.extend(segmentations[valid_end:])
+
     if seg_pixel_sizes is not None:
-        train_seg_pixel_sizes = seg_pixel_sizes[0:int(number_of_files * validation_start)]
-        train_seg_pixel_sizes.extend(train_seg_pixel_sizes[int(number_of_files * validation_end):])
-        valid_seg_pixel_sizes = seg_pixel_sizes[int(number_of_files * validation_start):int(number_of_files * validation_end)]
+        train_seg_pixel_sizes = {i:seg_pixel_sizes[i] for i in train_segmentations}
+        valid_seg_pixel_sizes = {i:seg_pixel_sizes[i] for i in valid_segmentations}
+        # train_seg_pixel_sizes = seg_pixel_sizes[0:valid_start]
+        # train_seg_pixel_sizes.extend(seg_pixel_sizes[valid_end:])
+        # valid_seg_pixel_sizes = seg_pixel_sizes[valid_start:valid_end]
+        # train_seg_pixel_sizes = seg_pixel_sizes[0:int(number_of_files * validation_start)]
+        # train_seg_pixel_sizes.extend(train_seg_pixel_sizes[int(number_of_files * validation_end):])
+        # valid_seg_pixel_sizes = seg_pixel_sizes[int(number_of_files * validation_start):int(number_of_files * validation_end)]
     else:
         train_seg_pixel_sizes = None
         valid_seg_pixel_sizes = None
@@ -822,8 +890,8 @@ def getTrainingDataForPerformance(micrographs, segmentations, config, print_func
 
 
 
-    train_segmentations = segmentations[0:int(number_of_files * validation_start)]
-    train_segmentations.extend(segmentations[int(number_of_files * validation_end):])
+    # train_segmentations = segmentations[0:int(number_of_files * validation_start)]
+    # train_segmentations.extend(segmentations[int(number_of_files * validation_end):])
 
     
     train_dataset = customDatasetForPerformance(train_micrographs, train_segmentations, batch_size, config, path, "Train", toStop=toStop,njobs=njobs, seg_pixel_sizes=train_seg_pixel_sizes, image_pixel_sizes=image_pixel_sizes, useAll=True)
@@ -887,7 +955,7 @@ def save_file(filename:Path, data, pixel_size):
                 data = np.sum(data, 0)
             
             data = (data > 0) * 255
-            data = data.astype(np.int8)
+            data = data.astype(np.uint8)
 
             
         Image.fromarray(data).save(filename,)
@@ -995,6 +1063,8 @@ def load_micrographs_files(paths, config, prep=False, per_file=False, get_shapes
             sig = int(config.high_pass_filter / pixel_size)
             sig += (sig + 1) % 2
             mrc_data = gaussian_filter(mrc_data,0,pixel_size) - gaussian_filter(mrc_data,sig,pixel_size)
+
+
         if prep is not None:
             mrc_data = preprocess(mrc_data)
         if resize:
@@ -1005,8 +1075,8 @@ def load_micrographs_files(paths, config, prep=False, per_file=False, get_shapes
                 # shape = [int(s * pixel_size / config.pixel_size) for s in mrc_data.shape[::-1]]
                 shape = [int(s * pixel_size / config.pixel_size) for s in mrc_data.shape]
                 # mrc_data = cv2.resize(mrc_data, shape,interpolation=cv2.INTER_CUBIC )
+  
                 mrc_data = fft_rescale_image(mrc_data, shape)
-
         for i in range(0,mrc_data.shape[0],step):
             for j in range(0,mrc_data.shape[1],step):
                 if i + image_size > mrc_data.shape[0]:

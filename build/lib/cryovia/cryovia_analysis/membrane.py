@@ -13,6 +13,8 @@ from scipy.ndimage import gaussian_filter
 from skimage.draw import disk
 import copy
 from matplotlib.cm import get_cmap
+from scipy.signal import savgol_filter
+
 
 
 class Membrane(dict):
@@ -165,10 +167,10 @@ class Membrane(dict):
         y,x = self.coords.T
 
         y_min = max(0, np.min(y) - 20)
-        y_max = min(self.analyser.micrograph_shape[0] -1, np.max(y) + 20)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + 20)
 
         x_min = max(0, np.min(x) - 20)
-        x_max = min(self.analyser.micrograph_shape[1] -1, np.max(x) + 20)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + 20)
 
         image = self.analyser.getResizedMicrograph()[y_min:y_max + 1, x_min:x_max + 1]
         image -= np.min(image)
@@ -192,13 +194,17 @@ class Membrane(dict):
         y,x = self.coords.T
 
         y_min = max(0, np.min(y) - 20)
-        y_max = min(self.analyser.micrograph_shape[0] -1, np.max(y) + 20)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + 20)
 
         x_min = max(0, np.min(x) - 20)
-        x_max = min(self.analyser.micrograph_shape[1] -1, np.max(x) + 20)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + 20)
 
         image = np.copy(image[y_min:y_max + 1, x_min:x_max + 1])
-        image -= np.min(image)
+        try:
+            image -= np.min(image)
+        except Exception as e:
+            print(y_min, y_max, x_min, x_max, self.analyser.micrograph_shape, self.analyser.segmentation_shape)
+            raise e
         image /= np.max(image)
         image *= 255
         image = Image.fromarray(np.uint8(image))
@@ -213,10 +219,10 @@ class Membrane(dict):
         y,x = self.coords.T
 
         y_min = max(0, np.min(y) - 20)
-        y_max = min(self.analyser.micrograph_shape[0] -1, np.max(y) + 20)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + 20)
 
         x_min = max(0, np.min(x) - 20)
-        x_max = min(self.analyser.micrograph_shape[1] -1, np.max(x) + 20)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + 20)
         image = np.copy(image[self.membrane_idx][y_min:y_max + 1, x_min:x_max + 1].todense())
 
         # image -= np.min(image)
@@ -259,10 +265,10 @@ class Membrane(dict):
         y,x = self.coords.T
 
         y_min = max(0, np.min(y) - 20)
-        y_max = min(self.analyser.micrograph_shape[0] -1, np.max(y) + 20)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + 20)
 
         x_min = max(0, np.min(x) - 20)
-        x_max = min(self.analyser.micrograph_shape[1] -1, np.max(x) + 20)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + 20)
         try:
             image = self.analyser.segmentation_stack[self.membrane_idx][y_min:y_max + 1, x_min:x_max + 1].todense()
         except Exception as e:
@@ -273,6 +279,26 @@ class Membrane(dict):
         image = Image.fromarray(np.uint8(image))
 
         image.thumbnail((200,200))
+        return image
+
+
+    def getCroppedImage(self, buffer=20):
+        
+        
+        y,x = self.coords.T
+
+        y_min = max(0, np.min(y) - buffer)
+        y_max = min(self.analyser.segmentation_shape[0] -1, np.max(y) + buffer)
+
+        x_min = max(0, np.min(x) - buffer)
+        x_max = min(self.analyser.segmentation_shape[1] -1, np.max(x) + buffer)
+
+        image = self.analyser.getResizedMicrograph()[y_min:y_max + 1, x_min:x_max + 1]
+        image -= np.min(image)
+        image /= np.max(image)
+        image *= 255
+        image = Image.fromarray(np.uint8(image))
+
         return image
 
     @property
@@ -882,12 +908,28 @@ class Membrane(dict):
         return len(self.is_enclosed_in)
 
     
-    def getResizedCoords(self, ratio):
+    def getResizedCoords(self, ratio, pixelSize=None, smoothContour=False, micrographShape=None):
+        def smooth(x, wl, method="interp"):
+            return savgol_filter(x, min(len(x), wl),3,mode=method)
         coords = self.coords
 
         coords = coords * ratio
 
         y,x = coords.T
+        if pixelSize is None:
+            pixelSize = self.analyser.pixel_size
+        smooth_int = int(400/ pixelSize)
+        # smooth_int = min(smooth_int, len(coords) // 4)
+        smooth_int = min(smooth_int, int(len(x) * 0.1))
+        if smoothContour:
+            if self.is_circle:
+                y = smooth(y, smooth_int, "wrap")
+                x = smooth(x, smooth_int, "wrap")
+            else:
+                y = smooth(y, smooth_int, "interp")
+                x = smooth(x, smooth_int, "interp")
+
+
 
         points = np.arange(len(y)) * ratio
 
@@ -906,6 +948,10 @@ class Membrane(dict):
         coords = np.array(np.array([interp_y, interp_x]).T)
         coords, ind = np.unique(coords, axis=0, return_index=True)
         coords = coords[np.argsort(ind)]
+
+        if micrographShape is not None:
+            coords[...,0] = np.clip(coords[...,0], 0,micrographShape[0]-1)
+            coords[...,1] = np.clip(coords[...,1], 0,micrographShape[1]-1)
         return coords
     
     @property

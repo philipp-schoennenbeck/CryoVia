@@ -36,7 +36,7 @@ from cryovia.gui.path_variables import DATASET_PATH
 if os.name == 'nt':
     MP_START_METHOD = "spawn"
 else:
-    MP_START_METHOD = "fork"
+    MP_START_METHOD = "spawn"
 
 
 
@@ -54,10 +54,11 @@ DEFAULT_CONFIGS = OrderedDict([
         ("rerun_segmentation", False),
         ("identify_instances",True),
         ("segmentation_model",get_all_segmentation_model_names),
+        ("max_batch_size", 0),
         ("only_segmentation", False),
         ("combine_snippets", False),
         ("max_nodes", 30)
-])),
+    ])),
     ("maskGrid", OrderedDict([
         ("use_existing_mask", False),
         ("to_size",100),
@@ -78,11 +79,18 @@ DEFAULT_CONFIGS = OrderedDict([
         ("max_neighbour_dist",300.0),
         ("min_thickness",20.0),
         ("max_thickness",70.0),
-        ("sigma",2)
-])),
+        ("sigma",2),
+        ("smooth_contour", False)
+    ])),
 
     ("estimateCurvature",OrderedDict([
-         ("max_neighbour_dist",300.0)
+         ("max_neighbour_dist",300.0),
+         ("adaptive", False),
+         ("max_distance", 1500),
+         ("min_distance", 35),
+         ("threshold", 2),
+         ("step",100)
+
 ])),
 
     ("shapePrediction",OrderedDict([
@@ -101,10 +109,12 @@ DEFAULT_CONFIGS = OrderedDict([
 ])
 
 
-# DATASET_PATH = Path().home() / ".cryovia" / "DATASETS"
 
 def logical_process(pipe, device="GPU"):
     import tensorflow as tf
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
     pipe.send(tf.config.list_logical_devices(device))
 
 def get_logical_devices(device="GPU"):
@@ -196,6 +206,9 @@ class Dataset:
         
         self.path = Path(path)
         self.name = name
+        names = get_all_dataset_names()
+        if name in names:
+            raise ValueError(f"{name} already exists as a Dataset.")
 
         # for key, default_value in get_default_values().items():
         #     setattr(self, key.replace(" ","_").lower(), default_value)
@@ -206,8 +219,8 @@ class Dataset:
         self.analysers = {}
         now = datetime.now()
         self.last_run_kwargs = {}
-        self.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                      "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+        self.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                      "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                       "Last run":""}
         self.save()
         
@@ -344,11 +357,12 @@ class Dataset:
             df = pd.read_csv(csv_path, header=0)
         except FileNotFoundError as e:
             
-            df = pd.DataFrame([], columns=["Circumference","Diameter", "Area","Shape","Shape probability","Thickness","Closed","Min thickness","Max thickness","Min curvature","Max curvature","Is probably ice","Index","Micrograph"])
-
+            df = pd.DataFrame([], columns=["Circumference","Diameter", "Area","Shape","Shape probability","Thickness","Closed","Min thickness","Max thickness",
+                                           "Min curvature","Max curvature","Is probably ice","Circularity", "Is enclosed","Enclosed distance","Index","Micrograph"])
+        df["Micrograph"] = df["Micrograph"].astype(str)
         return df 
 
-    def to_csv(self, njobs=50, csv=None):
+    def to_csv(self, njobs=1, csv=None):
         """
         Loads the data and writes the csv files.
         Parameters
@@ -369,6 +383,7 @@ class Dataset:
                 return
             csv = pd.concat(csv)
         csv.to_csv(self.pickel_path / "membranes.csv" ,index=False)
+        csv["Micrograph"] = csv["Micrograph"].astype(str)
         return csv
         
 
@@ -448,11 +463,15 @@ class Dataset:
         if len(to_segment) > 0:
             if gpu is None:
                 gpu = get_logical_devices("GPU")
+
                 if len(gpu) == 0:
                     gpu = get_logical_devices("CPU")
             pixelSizes = [self.pixelSizes[m] if m in self.pixelSizes else None for m in to_segment ]
             results = segModel.predict_multiprocessing( to_segment, pixelSizes, gpu, run_kwargs, njobs=njobs,threads=threads,tqdm_file=tqdm_file, dataset_name=self.name, stopEvent=stopEvent, seg_path=self.dataset_path, mask_path=self.mask_path)
             if stopEvent.is_set():
+                self.save()
+                return
+            if results is None:
                 self.save()
                 return
             for key, value in results.items():
@@ -474,10 +493,6 @@ class Dataset:
         segmentation_paths = [self.segmentation_paths[micrograph] if micrograph in self.segmentation_paths else None for micrograph in self.micrograph_paths]
         analyser_paths = [self.analysers[micrograph] if micrograph in self.analysers and Path(self.analysers[micrograph]).exists() else None for micrograph in self.micrograph_paths ]
         
-        # output_queue = Queue(10)
-
-        # for mg, an in zip(self.micrograph_paths, analyser_paths):
-        #     print(mg, an)
 
         if use_csv:
             csv = self.csv
@@ -494,6 +509,7 @@ class Dataset:
 
         input_queue = manager.Queue()
         output_queue =  manager.Queue()
+        error_queue = manager.Queue()
         # input_queue = Queue()
 
         if "CUDA_VISIBLE_DEVICES" in os.environ:
@@ -504,12 +520,11 @@ class Dataset:
         
 
         lock = manager.Lock()
-        analyser_proccesses = [mp.get_context(MP_START_METHOD).Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path]) for q in range(threads)]
+        analyser_proccesses = [mp.get_context(MP_START_METHOD).Process(target=run_analysis, args=[input_queue, output_queue, stopEvent, njobs,q, lock, self.mask_path, error_queue]) for q in range(threads)]
         [input_queue.put((micrograph, segmentation, analyser, rerun, run_kwargs, counter, self.dataset_path, shapeClassifier, csv, ps)) for counter, (micrograph, segmentation, analyser, csv, ps) in
                         enumerate(zip(self.micrograph_paths, segmentation_paths, analyser_paths, csvs, pixelSizes))]
         
         [p.start() for p in analyser_proccesses]
-
         
             # with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             
@@ -540,7 +555,6 @@ class Dataset:
 
                 if micrograph is None:
                     continue
-                # print(micrograph, path)
             
                 if path is None:
                     empty_micrographs.append(micrograph)
@@ -555,11 +569,20 @@ class Dataset:
                 self.segmentation_paths[micrograph] = seg_path
                 analysers.append(path)
                 self.save()
-        # print(time_used)
         if visible_gpus is None:
             del os.environ["CUDA_VISIBLE_DEVICES"]
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = visible_gpus
+
+        foundErrors = any([process.exitcode > 0 for process in analyser_proccesses])
+
+
+        if foundErrors:
+            tqdm_file.write("Something went wrong during analysis. Following errors occurred:\n")
+            while not error_queue.empty():
+                tqdm_file.write(error_queue.get())
+                tqdm_file.write("\n")
+            return
         self.to_csv(njobs)
         now = datetime.now()
         self.times["Last run"] = now.strftime("%m/%d/%Y, %H:%M:%S")
@@ -591,7 +614,6 @@ class Dataset:
                         if Path(self.segmentation_paths[m]).parent == self.dataset_path:
                             shutil.rmtree(self.segmentation_paths[m]) 
                 shutil.rmtree(self.mask_path)
-                
             if len(os.listdir(self.dataset_path)) == 0:
                 shutil.rmtree(self.dataset_path)
         
@@ -738,6 +760,8 @@ class Dataset:
                 del self.segmentation_paths[micrograph]
             if micrograph in self.analysers:
                 del self.analysers[micrograph]
+            if micrograph in self.pixelSizes:
+                del self.pixelSizes[micrograph]
             self.micrograph_paths.pop(idx)
         if all:
             self.micrograph_paths = []
@@ -841,7 +865,7 @@ class Dataset:
         return self.path / self.name
 
 
-    def copy(self, save_dir:Path):
+    def copy(self, save_dir:Path, print_func=None):
         """
         Create a copy of this dataset and all its data
         Parameters
@@ -859,7 +883,7 @@ class Dataset:
         name_counter = 1
         while True:
             new_name = f"{name}_{name_counter}"
-            if new_name not in all_names:
+            if new_name not in all_names and not (Path(save_dir) / new_name).exists():
                 break
             name_counter += 1
        
@@ -867,6 +891,8 @@ class Dataset:
         # save_dir = save_dir / new_name
         # save_dir.mkdir(parents=True, exist_ok=True)
         new_dataset = Dataset(new_name, save_dir)
+        counter = 1
+
         for m in self.micrograph_paths:
             new_dataset.addMicrographPaths([m])
 
@@ -885,6 +911,9 @@ class Dataset:
                 new_seg_path = new_dataset.dataset_path / Path(self.segmentation_paths[m]).name
                 shutil.copy(self.segmentation_paths[m], new_seg_path)
                 new_dataset.segmentation_paths[m] = new_seg_path
+            if print_func is not None and (counter % 10 == 0 or counter == len(self.micrograph_paths)):
+                print_func(f"Copying {self.name}: {counter}/{len(self.micrograph_paths)} files\n")
+            counter += 1
         
         new_dataset.to_csv()
         new_dataset.save()
@@ -916,17 +945,17 @@ class Dataset:
                 with open(path / "dataset.pickle", "rb") as f:
                     dataset = CustomUnpickler(f).load()
             else:
-                raise FileExistsError(path)
+                raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
-                dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                        "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+                dataset.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                        "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                         "Last run":""}
             if not hasattr(dataset, "last_run_kwargs"):
                 dataset.last_run_kwargs = {}
             if not hasattr(dataset, "pixelSizes"):
                 dataset.pixelSizes = {}
-        except FileExistsError as e:
+        except FileNotFoundError as e:
             path = DATASET_PATH / p
             if path.suffix == ".pickle" and path.is_file():
                 with open(path, "rb") as f:
@@ -935,26 +964,53 @@ class Dataset:
                 with open(path / "dataset.pickle", "rb") as f:
                     dataset = CustomUnpickler(f).load()
             else:
-                raise FileExistsError(path)
+                raise FileNotFoundError(path)
             if not hasattr(dataset, "times"):
                 now = datetime.now()
-                dataset.times = {"Created":now.strftime("%m/%d/%Y, %H:%M:%S"),
-                        "Last changed":now.strftime("%m/%d/%Y, %H:%M:%S"),
+                dataset.times = {"Created":now.strftime("%Y-%m-%d, %H:%M:%S"),
+                        "Last changed":now.strftime("%Y-%m-%d, %H:%M:%S"),
                         "Last run":""}
             if not hasattr(dataset, "last_run_kwargs"):
                 dataset.last_run_kwargs = {}
             if not hasattr(dataset, "pixelSizes"):
                 dataset.pixelSizes = {}
+
+
+        # conversion_date = datetime(2025,5,26,15,45)
+
+        strings = ["Created", "Last changed", "Last run"]
+        changed = False
+        for string in strings:
+            if len(dataset.times[string]) == 0:
+                continue
+            time_str = dataset.times[string]
+            try:
+                dt_object = datetime.strptime(time_str, "%m/%d/%Y, %H:%M:%S")
+            except ValueError:
+                continue
+            
+            # if dt_object < conversion_date:
+            dataset.times[string] = dt_object.strftime("%Y-%m-%d, %H:%M:%S")
+            changed = True
+        if changed:
+            dataset.save()
+
+
+
         return dataset
     
 
 def print_error(error):
     print(error, flush=True)
 
-def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path ):
+def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path, error_queue ):
     """
     Run the analysis, only called by the run method of datasets.
     """
+    from cryovia.gui.starting_menu import changeToDebug
+    if os.environ["CRYOVIA_MODE"] is not None and int(os.environ["CRYOVIA_MODE"]) == 1:
+        changeToDebug()
+    test_counter = 0
     try:
         with mp.get_context(MP_START_METHOD).Pool(njobs) as pool:
             while True:
@@ -972,6 +1028,8 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                     
                     times = {}
                     now = datetime.now()
+
+
                     if analyser is not None and not rerun:
                         if kwargs["general"]["only_run_for_new_data"]:
                             
@@ -1091,13 +1149,13 @@ def run_analysis(input_queue, outputqueue, stopEvent, njobs, q, lock, mask_path 
                     outputqueue.put((micrograph, path, analyser.segmentation_path, times))
                         
                 except Exception as e:
-                    print("error in while loop")
-                    print(traceback.format_exc())
+                    raise e
+
                     outputqueue.put((None, traceback.format_exc(), None, None))
                     continue
-    except Exception:
-        print("Whole process error")
-        print(traceback.format_exc())
+    except Exception as e:
+        error_queue.put(traceback.format_exc())
+        raise e
     
 
 if __name__ == "__main__":
